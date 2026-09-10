@@ -1,0 +1,18 @@
+# Core app
+streamlit>=1.38
+
+# Gemini (LLM + multimodal ad reading)
+google-generativeai>=0.8
+
+# RAG (optional at first - app falls back to keyword search if these
+# aren't installed or the embedding model can't be downloaded)
+chromadb>=0.5
+sentence-transformers>=3.0
+
+# Document ingestion for curating catalog sources during data work
+# (not required to run the app itself - install only when doing data curation)
+# pymupdf>=1.24
+# pdfplumber>=0.11
+# python-docx>=1.1
+# pandas>=2.2
+# openpyxl>=3.1

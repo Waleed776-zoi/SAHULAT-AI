@@ -1,0 +1,16 @@
+# Secrets - never commit real keys
+.env
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Chroma local persistence (if you switch from in-memory to on-disk client)
+chroma_db/
+
+# OS/editor
+.DS_Store
+.vscode/

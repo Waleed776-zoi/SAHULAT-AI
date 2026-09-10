@@ -1,0 +1,48 @@
+{
+  "opportunity_id": "peef_punjab_undergraduate",
+  "name": "Punjab Education Endowment Fund (PEEF) Undergraduate Scholarship",
+  "name_ur": "پنجاب ایجوکیشن انڈومنٹ فنڈ انڈرگریجویٹ اسکالرشپ",
+  "category": "scholarship",
+  "provider": "Punjab Education Endowment Fund (PEEF), Government of Punjab",
+  "province_scope": "Punjab",
+  "target_group": "Punjab-domicile students entering undergraduate study straight after Intermediate",
+  "summary_en": "A merit-and-need scholarship for Punjab-domicile students who scored well in Intermediate and come from a lower-income household, covering a monthly stipend for undergraduate study.",
+  "summary_ur": "پنجاب ڈومیسائل رکھنے والے طلباء کے لیے میرٹ اور ضرورت پر مبنی اسکالرشپ، جو انٹرمیڈیٹ میں اچھے نمبر رکھتے ہوں اور کم آمدنی والے گھرانے سے تعلق رکھتے ہوں۔",
+  "eligibility_conditions": {
+    "min_age": null,
+    "max_age": null,
+    "domicile_provinces": ["Punjab"],
+    "min_education_level": "intermediate",
+    "min_marks_percentage": 60,
+    "max_monthly_household_income": 60000,
+    "must_be_currently_enrolled": true,
+    "must_not_have_existing_scholarship": true,
+    "employment_status_required": null,
+    "special_quota_note": "Children of BPS 1-4 government employees and children of civilians martyred in terrorist attacks are exempt from the income condition. Special quota also exists for orphans, minorities, and disabled students.",
+    "min_experience_years": null,
+    "application_deadline": null
+  },
+  "required_documents": [
+    "Punjab domicile certificate",
+    "Matric certificate/marksheet",
+    "Intermediate certificate/marksheet (current year, First Division/60%+)",
+    "CNIC or Form-B",
+    "Proof of full-time admission at a partner university/institution",
+    "Income certificate (parent/guardian, from Tehsildar or employer as applicable)",
+    "Passport-size photographs"
+  ],
+  "application_steps": [
+    "Check PEEF's current-year scholarship announcement and application window",
+    "Secure full-time admission at a PEEF partner institution",
+    "Gather domicile, income, and educational documents",
+    "Submit the application via the PEEF portal or the designated institutional PEEF focal point",
+    "Await shortlisting/merit list and respond to any verification requests before the deadline"
+  ],
+  "official_url": "https://www.peef.org.pk/",
+  "source_title": "PEEF official student portal",
+  "source_date": "TODO-VERIFY",
+  "last_verified": "TODO-VERIFY-BEFORE-DEMO",
+  "source_type": "curated",
+  "confidence_status": "needs_recheck",
+  "disclaimer": "Income ceiling and marks threshold vary by exact PEEF sub-program and year (figures seen during research ranged Rs. 35,000-60,000 depending on program/year). A team member MUST confirm the current cycle's exact numbers on peef.org.pk before the demo."
+}
