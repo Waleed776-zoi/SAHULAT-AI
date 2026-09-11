@@ -243,6 +243,142 @@ STRINGS: Dict[str, Dict[str, str]] = {
     "extracted_quota": {"en": "Preference noted", "ur": "ترجیح درج ہے"},
     "extracted_category": {"en": "Read as", "ur": "کس قسم کے طور پر پڑھا گیا"},
 
+    # ================= V2 P0-1: eligibility scorecard =====================
+    "scorecard_heading": {"en": "Eligibility scorecard", "ur": "اہلیت کا تفصیلی جائزہ"},
+    "scorecard_summary": {
+        "en": "{met} of {total} stated conditions met",
+        "ur": "{total} میں سے {met} شرائط پوری"},
+    "scorecard_summary_extra": {
+        "en": "{unmet} not met · {unknown} need verification",
+        "ur": "{unmet} پوری نہیں · {unknown} کی تصدیق درکار"},
+    "scorecard_no_score_note": {
+        "en": "This is a count of the conditions below, not a percentage chance of success. "
+              "The official rules decide, not this number.",
+        "ur": "یہ نیچے دی گئی شرائط کی گنتی ہے، کامیابی کے امکان کا تناسب نہیں۔ فیصلہ سرکاری قواعد کرتے ہیں، یہ عدد نہیں۔"},
+    "col_requirement": {"en": "Requirement", "ur": "شرط"},
+    "col_your_answer": {"en": "Your information", "ur": "آپ کی معلومات"},
+    "col_result": {"en": "Result", "ur": "نتیجہ"},
+    "result_passed": {"en": "Passed", "ur": "پوری"},
+    "result_failed": {"en": "Not met", "ur": "پوری نہیں"},
+    "result_verify": {"en": "Verification required", "ur": "تصدیق درکار"},
+
+    # ================= V2 P0-2: why / why not / what changes ==============
+    "why_you_match": {"en": "Why you match", "ur": "آپ کیوں اہل ہیں"},
+    "why_you_dont": {"en": "Why you don't currently match", "ur": "آپ فی الحال کیوں اہل نہیں"},
+    "what_needs_verification": {"en": "What needs verification", "ur": "کس چیز کی تصدیق درکار ہے"},
+    "what_would_change": {"en": "What would change this", "ur": "اس میں کیا فرق ڈال سکتا ہے"},
+    "gap_line": {
+        "en": "This requires {required}. Your profile says {actual}.",
+        "ur": "اس کے لیے {required} درکار ہے۔ آپ کی معلومات کے مطابق {actual}۔"},
+    "gap_unknown_line": {
+        "en": "This requires {required}. Your profile does not answer this yet.",
+        "ur": "اس کے لیے {required} درکار ہے۔ آپ نے ابھی اس کا جواب نہیں دیا۔"},
+    "what_would_change_caveat": {
+        "en": "Meeting this does not by itself make you eligible - the other conditions "
+              "still apply, and only the awarding body decides.",
+        "ur": "صرف یہ شرط پوری کرنے سے اہلیت ثابت نہیں ہوتی — باقی شرائط بھی لاگو ہیں، اور فیصلہ متعلقہ ادارہ ہی کرتا ہے۔"},
+    "decisive_note": {
+        "en": "One unmet condition is enough to change the result, however many others passed.",
+        "ur": "ایک شرط پوری نہ ہو تو نتیجہ بدل جاتا ہے، چاہے باقی سب پوری ہوں۔"},
+
+    # ================= V2 P0-3: top matches ===============================
+    "top_matches_heading": {"en": "Your top opportunities", "ur": "آپ کے لیے بہترین مواقع"},
+    "top_matches_lede": {
+        "en": "Ranked by structured facts only - status, conditions confirmed, deadline. "
+              "No model opinion is involved in this order.",
+        "ur": "ترتیب صرف حقائق پر ہے — حیثیت، تصدیق شدہ شرائط، آخری تاریخ۔ اس ترتیب میں ماڈل کی رائے شامل نہیں۔"},
+    "top_matches_empty": {
+        "en": "Nothing qualifies for this shortlist yet. Your full results are below.",
+        "ur": "ابھی کوئی موقع اس فہرست کے لیے موزوں نہیں۔ آپ کے مکمل نتائج نیچے ہیں۔"},
+    "rank_reason_all_met": {"en": "All {total} stated conditions met", "ur": "تمام {total} شرائط پوری"},
+    "rank_reason_met": {"en": "{met} of {total} conditions met", "ur": "{total} میں سے {met} شرائط پوری"},
+    "rank_reason_priority": {"en": "you match the {groups} priority group",
+                             "ur": "آپ {groups} ترجیحی زمرے میں آتے ہیں"},
+    "rank_reason_deadline": {"en": "closes in {days} days", "ur": "{days} دن میں بند"},
+    "rank_reason_verify": {"en": "{unknown} still to confirm", "ur": "{unknown} کی تصدیق باقی"},
+
+    # ================= V2 P0-6: next best action ==========================
+    "next_step_label": {"en": "Next step", "ur": "اگلا قدم"},
+    "action_explore_others": {
+        "en": "Explore your other matching opportunities - this listing has closed.",
+        "ur": "اپنے دیگر موزوں مواقع دیکھیں — یہ اشتہار بند ہو چکا ہے۔"},
+    "action_review_blocker": {
+        "en": "Check the {subject} requirement against the official source before applying.",
+        "ur": "درخواست سے پہلے {subject} کی شرط سرکاری ذریعے سے دیکھ لیں۔"},
+    "action_answer_missing_one": {
+        "en": "Answer one more question so this can be checked - {subject}",
+        "ur": "ایک اور سوال کا جواب دیں تاکہ اسے جانچا جا سکے — {subject}"},
+    "action_answer_missing_many": {
+        "en": "Answer {count} more questions so these conditions can be checked.",
+        "ur": "{count} مزید سوالات کے جواب دیں تاکہ یہ شرائط جانچی جا سکیں۔"},
+    "action_confirm_condition": {
+        "en": "Confirm the {subject} requirement from the official source.",
+        "ur": "{subject} کی شرط سرکاری ذریعے سے تصدیق کریں۔"},
+    "action_prepare_documents": {
+        "en": "Prepare the {subject} documents this opportunity asks for.",
+        "ur": "اس موقع کے لیے مطلوبہ {subject} دستاویزات تیار کریں۔"},
+    "action_apply": {"en": "Apply through the official source.",
+                     "ur": "سرکاری ذریعے سے درخواست دیں۔"},
+    "action_check_source": {"en": "Read the official source for the current details.",
+                            "ur": "موجودہ تفصیلات کے لیے سرکاری ذریعہ پڑھیں۔"},
+    "action_answer_now": {"en": "Answer this now", "ur": "ابھی جواب دیں"},
+
+    # ================= V2 P0-7: responsible AI showcase ===================
+    "architecture_heading": {"en": "AI does not decide your eligibility",
+                             "ur": "آپ کی اہلیت کا فیصلہ AI نہیں کرتا"},
+    "architecture_body": {
+        "en": "Eligibility is computed by deterministic rules from the conditions each "
+              "authority publishes. The language model only explains a decision that has "
+              "already been made, and it cannot change one.",
+        "ur": "اہلیت کا تعین متعین قواعد سے ہوتا ہے جو ہر ادارے کی شائع کردہ شرائط پر مبنی ہیں۔ زبان کا ماڈل صرف پہلے سے کیے گئے فیصلے کی وضاحت کرتا ہے، اسے بدل نہیں سکتا۔"},
+    "architecture_upload_label": {"en": "Uploaded document", "ur": "اپلوڈ کردہ دستاویز"},
+    "architecture_curated_label": {"en": "Curated record", "ur": "ہماری تیار کردہ اندراج"},
+    "architecture_same_engine": {
+        "en": "Both paths end in the same rules engine. An uploaded poster is screened by "
+              "exactly the code that screens a curated record.",
+        "ur": "دونوں راستے ایک ہی رولز انجن پر ختم ہوتے ہیں۔ اپلوڈ کردہ اشتہار کو بالکل اسی کوڈ سے جانچا جاتا ہے جو ہمارے اندراجات کو جانچتا ہے۔"},
+    "pipeline_extract": {"en": "AI reads the document into structured fields",
+                         "ur": "AI دستاویز کو ساختہ خانوں میں پڑھتا ہے"},
+
+    # ================= V2 P0-8: landing ===================================
+    "home_paths_heading": {"en": "Choose a path", "ur": "اپنا راستہ منتخب کریں"},
+    "path_scholarship": {"en": "Find a scholarship", "ur": "اسکالرشپ تلاش کریں"},
+    "path_job": {"en": "Find a job", "ur": "نوکری تلاش کریں"},
+    "path_skills": {"en": "Learn a skill", "ur": "ہنر سیکھیں"},
+    "path_check_ad": {"en": "Check an advertisement", "ur": "اشتہار کی جانچ کریں"},
+    "correct_heading": {"en": "Correct what was read", "ur": "پڑھی گئی معلومات درست کریں"},
+    "correct_note": {
+        "en": "Reading a photo is not perfect. Fix anything that does not match the original "
+              "document, and the screening below will be re-run against your corrections.",
+        "ur": "تصویر سے پڑھنا ہمیشہ درست نہیں ہوتا۔ جو بات اصل دستاویز سے مطابقت نہ رکھے اسے درست کریں، جانچ دوبارہ کی جائے گی۔"},
+    "correct_apply": {"en": "Apply corrections and re-screen", "ur": "درستگی لاگو کریں اور دوبارہ جانچیں"},
+    "correct_applied": {
+        "en": "Screened against your corrections, not the original reading.",
+        "ur": "یہ جانچ آپ کی درست کردہ معلومات پر کی گئی ہے، اصل پڑھائی پر نہیں۔"},
+    "correct_deadline_hint": {"en": "Format: YYYY-MM-DD", "ur": "شکل: سال-مہینہ-دن"},
+    "correct_none": {"en": "Not stated", "ur": "درج نہیں"},
+    "path_start": {"en": "Start here", "ur": "یہاں سے شروع کریں"},
+    "home_upload_hint": {
+        "en": "Use the 'Read an announcement' tab above.",
+        "ur": "اوپر 'اعلان پڑھیں' والا ٹیب استعمال کریں۔"},
+    "path_check_ad_body": {
+        "en": "Found a poster, screenshot or PDF elsewhere? Have it read and screened.",
+        "ur": "کہیں کوئی اشتہار، اسکرین شاٹ یا PDF ملا؟ اسے پڑھوا کر جانچ لیں۔"},
+    "benefits_heading": {"en": "Why Sahulat", "ur": "سہولت کیوں"},
+    "benefit_personal_title": {"en": "Personalised", "ur": "ذاتی نوعیت کا"},
+    "benefit_personal_body": {"en": "Matched to the profile you enter, not a generic list.",
+                              "ur": "آپ کی دی گئی معلومات کے مطابق، عام فہرست نہیں۔"},
+    "benefit_evidence_title": {"en": "Evidence-based", "ur": "شواہد پر مبنی"},
+    "benefit_evidence_body": {
+        "en": "Eligibility comes from structured rules, with the source shown for every record.",
+        "ur": "اہلیت متعین قواعد سے نکلتی ہے، اور ہر اندراج کا ماخذ دکھایا جاتا ہے۔"},
+    "benefit_bilingual_title": {"en": "Bilingual", "ur": "دو لسانی"},
+    "benefit_bilingual_body": {"en": "English and Urdu across the whole journey.",
+                               "ur": "پورے سفر میں انگریزی اور اردو۔"},
+    "benefit_realworld_title": {"en": "Works with real-world ads", "ur": "اصل اشتہارات پر کام کرتا ہے"},
+    "benefit_realworld_body": {"en": "Upload a poster or PDF you found anywhere else.",
+                               "ur": "کہیں سے بھی ملا اشتہار یا PDF اپلوڈ کریں۔"},
+
     # -- follow-up chat -----------------------------------------------------
     "ask_followup": {"en": "Ask a follow-up question", "ur": "مزید سوال پوچھیں"},
     "ask_followup_hint": {
@@ -988,6 +1124,88 @@ def describe_check(check: ConditionCheck, lang: str = "en") -> Tuple[str, str]:
 
     return title, f"{_w(_REQUIRED_WORD, lang)}: {required} · " \
                   f"{_w(_YOU_WORD, lang)}: {_actual_text(check, lang)}"
+
+
+_RESULT_LABELS = {
+    MET: "result_passed",
+    UNMET: "result_failed",
+    UNKNOWN: "result_verify",
+}
+
+
+def scorecard_row(check: ConditionCheck, lang: str = "en"):
+    """
+    One scorecard line (V2 P0-1): (requirement, your information, result).
+
+    Same source of truth as describe_check() - a condition must never read one
+    way in the scorecard and another way in the explanation.
+    """
+    return (check_title(check, lang),
+            _requirement_text(check, lang),
+            _actual_text(check, lang),
+            t(_RESULT_LABELS.get(check.status, "result_verify"), lang))
+
+
+def describe_gap(check: ConditionCheck, lang: str = "en") -> str:
+    """
+    What stands between the profile and this condition (V2 P0-2).
+
+    States the requirement and the profile's own value side by side, and
+    nothing else. It never says what *would* happen if the value changed:
+    that is a claim about a future decision this system does not make.
+    """
+    required = _requirement_text(check, lang)
+    if check.status == UNKNOWN or check.actual is None:
+        return t("gap_unknown_line", lang, required=required)
+    return t("gap_line", lang, required=required, actual=_actual_text(check, lang))
+
+
+def describe_next_action(action, lang: str = "en") -> str:
+    """
+    Render a NextAction (V2 P0-6). The decision of *which* action belongs to
+    core/next_action.py; this only puts it into words.
+    """
+    key = action.key
+    if key == "review_blocker" or key == "confirm_condition":
+        stub = ConditionCheck(key=action.subject.get("check", ""), status=UNKNOWN)
+        return t(f"action_{key}", lang, subject=check_title(stub, lang).lower())
+    if key == "answer_missing":
+        fields = action.subject.get("fields", [])
+        if len(fields) == 1:
+            return t("action_answer_missing_one", lang,
+                     subject=profile_field_label(fields[0], lang))
+        return t("action_answer_missing_many", lang, count=len(fields))
+    if key == "prepare_documents":
+        return t("action_prepare_documents", lang, subject=action.subject.get("count", ""))
+    return t(f"action_{key}", lang)
+
+
+def describe_ranking_reason(factors: dict, lang: str = "en") -> str:
+    """
+    Why this result ranks where it does (V2 P0-3), from structured facts only.
+
+    Kept to at most three clauses: a reason nobody reads is not a reason.
+    """
+    parts = []
+    total, met = factors.get("total", 0), factors.get("met", 0)
+    if total and met == total:
+        parts.append(t("rank_reason_all_met", lang, total=total))
+    elif total:
+        parts.append(t("rank_reason_met", lang, met=met, total=total))
+
+    groups = factors.get("priority_groups") or []
+    if groups:
+        names = join_list([priority_group_label(g, lang) for g in groups], lang)
+        parts.append(t("rank_reason_priority", lang, groups=names))
+
+    days = factors.get("days_until_deadline")
+    if days is not None and days >= 0:
+        parts.append(t("rank_reason_deadline", lang, days=days))
+    elif factors.get("unknown"):
+        parts.append(t("rank_reason_verify", lang, unknown=factors["unknown"]))
+
+    separator = " · "
+    return separator.join(parts[:3])
 
 
 def describe_requirements(conditions, lang: str = "en"):

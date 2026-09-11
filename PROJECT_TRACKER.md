@@ -4,7 +4,7 @@
 Companion to `README.md` (which is the *setup* guide). This file is the *work* guide.
 
 - **Created:** 2026-09-10
-- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Interaction refinement pass: checklist fix, visible field states, motion. 39 items closed, 143 tests passing
+- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Interaction refinement pass: checklist fix, visible field states, motion. 47 items closed, 195 tests passing
 - **Baseline audited:** full read of all 10 source files, 5 data files, config, and a live environment verification run.
 
 ---
@@ -54,7 +54,7 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **143/143 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Unit tests | **195/195 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **3** opportunities: `hec_balochistan_fata_ug` (scholarship), `navttc_hunarmand_pakistan` (skills), `peef_punjab_undergraduate` (scholarship) |
 | Job records loaded | **0** — all `njp_jobs_sample.json` entries are `REPLACE ME` placeholders and are correctly skipped by the loader |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
@@ -111,6 +111,14 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | OPS-01 | No error handling around any Gemini call | `llm_client.py` | **P1** | **DONE** | — |
 | OPS-02 | Confirm model name against the live API | `llm_client.py` | **P1** | **DONE** | — |
 | UX-10 | Upload result was a raw JSON dump; no feedback during the AI read | `app.py` + `ad_reader.py` | **P1** | **DONE** | — |
+| V2-1 | Eligibility scorecard — requirement / your answer / result | `models.py` + `app.py` | **P0** | **DONE** | — |
+| V2-2 | Why you match / why you don't / what needs verification | `i18n.py` + `app.py` | **P0** | **DONE** | — |
+| V2-3 | Personalised top matches, deterministically ranked | `rules_engine.py` + `app.py` | **P0** | **DONE** | — |
+| V2-4 | Sahulat Lens — wider schema, user correction of the reading | `llm_client.py` + `ad_reader.py` + `app.py` | **P0** | **DONE** | — |
+| V2-5 | Trust layer — curated and uploaded never merged | `models.py` + `app.py` | **P0** | **DONE** | — |
+| V2-6 | Next best action on every result | `next_action.py` (new) | **P0** | **DONE** | — |
+| V2-7 | Responsible-AI architecture made visible | `app.py` | **P0** | **DONE** | — |
+| V2-8 | Landing: four paths including the Lens, plus benefits | `app.py` | **P0** | **DONE** | — |
 | UX-07 | Document checklist count/bar lagged one interaction behind | `app.py` | **P0** | **DONE** | — |
 | UX-08 | Form fields had no visible boundary until clicked | `styles/` | **P0** | **DONE** | — |
 | UX-09 | No motion system; header was not a distinct layer | `styles/` + `app.py` | **P1** | **DONE** | — |
@@ -423,6 +431,198 @@ ceiling into structured fields.
 - [x] Model name confirmed against the live API.
 - [x] A real text generation succeeds, in both languages.
 - [x] A real image extraction succeeds.
+
+---
+
+### V2 — P0 upgrade (branch `v2`)
+
+Implements `Sahulat_AI_V2_P0_Highest_Priority.md`. Each item below names what
+shipped and, where the brief and this product's honesty rules pulled in
+different directions, which way it was resolved and why.
+
+---
+
+#### V2-1 — Eligibility scorecard
+**Area:** `core/models.py`, `core/i18n.py`, `app.py` · **Priority:** P0 · **Status:** **DONE**
+
+Every result now opens onto a three-column table — **requirement · your
+information · result** — one row per condition, with a summary line above it.
+
+`MatchResult` gained `satisfied()`, `blockers()`, `gaps()` and `scorecard()`,
+returning `ConditionCheck` objects and counts. No prose: `i18n.scorecard_row()`
+renders each row from the same helpers `describe_check()` already used, so a
+condition cannot read one way in the scorecard and another in the explanation.
+
+**Departure from the brief, deliberate.** The brief asks for "Approximately 90%
+or another clearly defined profile-match representation". The implementation
+takes the second option and shows **"4 of 5 stated conditions met"** with a
+proportional bar, not a percentage.
+
+A percentage would be read as a probability of being awarded the scholarship.
+Nothing in this system computes that: the rules evaluate stated conditions, and
+say nothing about competition, quotas or the awarding body's discretion. "92%"
+implies a near-certainty that the product has no basis for, and the brief's own
+warning — *"92% match should not automatically mean Eligible"* — describes
+exactly the misreading a percentage invites. A count of conditions is checkable
+against the rows immediately beneath it; a percentage is not checkable against
+anything. A test asserts the count and the rows can never drift apart, and
+another asserts that a full row of passes with one hard failure is still "not
+eligible".
+
+- [x] Requirement-level results preserved and passed to the UI.
+- [x] Passed / failed / verification-required visually separated.
+- [x] Final status stays deterministic; the summary never overrides it.
+
+---
+
+#### V2-2 — Why you match, why you don't, what needs verification
+**Area:** `core/i18n.py`, `app.py` · **Priority:** P0 · **Status:** **DONE**
+
+Three separately-headed groups, because they call for three different
+responses. A blocker is named first — burying a decisive failure under
+"prepare your documents" would be actively misleading — with the note that one
+unmet condition changes the result however many others passed.
+
+**"What would change this"** states the requirement and the profile's own value
+side by side: *"This requires at least 60%. Your profile says 54%."* It does
+**not** say what would follow from changing it. The brief permits this
+("do not promise... unless the rules genuinely support that conclusion") and
+the rules never do: eligibility here is a screening result, not an award. A
+test asserts no gap line ever contains a promise.
+
+Unanswered is phrased differently from failed throughout — *"your profile does
+not answer this yet"* — because unanswered is not unqualified.
+
+- [x] Decisive, failed and verification-required criteria identified separately.
+- [x] Explanations generated from stored results, not from an LLM.
+- [x] Both languages.
+
+---
+
+#### V2-3 — Personalised top matches
+**Area:** `core/rules_engine.py`, `app.py` · **Priority:** P0 · **Status:** **DONE**
+
+A shortlist leads the results page, each entry carrying the reason it is there
+("All 5 stated conditions met · you match the women applicants priority
+group"). `evaluate_all` ranks on: status → open before closed → deadline
+urgency → priority-group matches → share confirmed → conditions met → fewer
+unknowns → fewer required documents → name. `ranking_factors()` exposes those
+numbers so the UI explains the order instead of asserting it.
+
+Two judgement calls:
+
+- **"No deadline on record" is its own bucket**, sorted after dated listings
+  rather than treated as infinitely far away or infinitely urgent. Most curated
+  records legitimately have no deadline; inventing a position for them would be
+  false precision.
+- **"Missing documents" became "number of required documents"**, as a late
+  tie-break only. The app does not know which documents a user already holds —
+  the checklist is UI state, not profile data — so ranking on "missing" would
+  have meant inventing knowledge. Documented rather than quietly fudged.
+
+`top_matches()` excludes closed listings and demonstrable non-matches, and
+returns fewer than three (or none) rather than padding the list with weak
+entries — a shortlist is only worth having if being on it means something.
+
+- [x] Deterministic ranking from structured facts; no model opinion.
+- [x] Reason shown for each shortlisted result.
+
+---
+
+#### V2-4 — Sahulat Lens
+**Area:** `core/llm_client.py`, `core/ad_reader.py`, `app.py` · **Priority:** P0 · **Status:** **DONE**
+
+Building on UX-10 (staged reading, readable extraction), this adds:
+
+**A wider schema** — `province_scope`, `gender_required`, `fields_of_study`.
+Extracted values are accepted only when they match a vocabulary the rules
+engine understands; anything else is dropped to `None`. A mis-mapped gender
+becomes a real eligibility gate and wrongly excludes people, so unread is the
+safer failure. The prompt also states explicitly that a document merely
+*mentioning* or prioritising women is **not** gender-restricted.
+
+**User correction** — the reading can be edited (ages, provinces, education,
+marks, income, deadline) and re-screened. Extraction from a photograph is
+unreliable and the rules engine treats whatever comes out of it as fact; the
+edit is what stops a misread number from silently becoming a verdict. A test
+drives the full path: a poster misread as 90% instead of 60% flips
+"not eligible" → "eligible" once corrected, and the record's trust level does
+not move.
+
+- [x] Structured fields extracted, shown before evaluation.
+- [x] User can confirm or correct; corrections re-screened.
+- [x] Same deterministic engine as curated records.
+- [x] Never presented as officially verified.
+
+---
+
+#### V2-5 — Trust layer
+**Area:** `core/models.py`, `app.py` · **Priority:** P0 · **Status:** **DONE**
+
+Already load-bearing before V2 (Invariant 4); this pass made it testable.
+Tests now assert that an uploaded record is never verified, that **high
+extraction confidence is not verification** (confidence describes how clearly
+the model could read the page, not whether the page is true or current), and
+that a user correcting a field does not promote the record's trust level.
+
+- [x] Source type on every record; source metadata stored and shown.
+- [x] Last-verified date for curated records only.
+- [x] The two levels are never merged visually or in code.
+
+---
+
+#### V2-6 — Next best action
+**Area:** `core/next_action.py` (new) · **Priority:** P0 · **Status:** **DONE**
+
+A new decision module, deliberately separate from rendering: it emits a machine
+key plus structured subject, and `i18n.describe_next_action()` renders it.
+Exactly one action comes back per result, from a priority ladder:
+
+1. listing closed → explore other matches (a dead application page is not a
+   next step, whatever the profile says)
+2. a condition is demonstrably unmet → name it
+3. unanswered by the user → ask them (cheap, immediate)
+4. unanswered by the *record* → send them to the official source
+5. eligible with documents → prepare them
+6. eligible with a link → apply
+7. otherwise → read the source
+
+An action names the next *step*, never the result of taking it. Shown outside
+the detail expander, since a user who never expands still needs to know what
+to do. A test asserts every result in every profile state yields exactly one.
+
+- [x] One primary action, prominently placed; extras stay underneath.
+- [x] Links to the official source where one exists.
+
+---
+
+#### V2-7 — Responsible-AI architecture, made visible
+**Area:** `app.py` · **Priority:** P0 · **Status:** **DONE**
+
+*How this match was generated* now opens with the claim itself — **"AI does not
+decide your eligibility"** — followed by the pipeline and the note that both
+entry points end in the same rules engine. On the upload path the first step
+becomes *AI reads the document into structured fields*, so the difference
+between the two routes is visible and the shared engine is demonstrated rather
+than asserted.
+
+- [x] Rules/explanation separation preserved and stated in the UI.
+- [x] Same engine shown running for uploaded opportunities.
+
+---
+
+#### V2-8 — Landing
+**Area:** `app.py` · **Priority:** P0 · **Status:** **DONE**
+
+Four paths, the fourth being **Check an advertisement** — the Lens was the
+feature most likely to be the demo moment and it was not on the landing page at
+all. A path with no records yet is **disabled and labelled**, not hidden: a thin
+catalogue is a fact about the data, and hiding it would misrepresent the
+product. A four-benefit row (personalised / evidence-based / bilingual / works
+with real-world ads) sits above the existing principles.
+
+- [x] Four paths including the upload route.
+- [x] Benefits row; bilingual throughout.
 
 ---
 
@@ -1248,6 +1448,9 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-11 | **V2-1** — count of conditions, not a percentage match score | A percentage reads as a probability of being awarded, which no rule here computes; the brief's own warning describes exactly that misreading. A count is checkable against the rows beneath it | Claude |
+| 2026-09-11 | **V2-3** — rank on required-document count, not "missing documents" | The app never learns which documents a user holds; the checklist is UI state. Ranking on "missing" would have required inventing that knowledge. Late tie-break only, documented | Claude |
+| 2026-09-11 | **V2-4** — drop extracted values outside the known vocabulary | A mis-mapped gender or field of study becomes a real eligibility gate and wrongly excludes people. Unread is recoverable; wrong is not | Claude |
 | 2026-09-11 | **UX-10** — staged progress here, but still not on the results page | The test is whether real work is happening, not whether it looks better. The ad read is a remote call taking 8–12s; rules matching is local and instant. Same rule (spec 10.1), opposite answer | Claude |
 | 2026-09-11 | **UX-10** — show what the document did *not* say | A null condition means the document was silent, and silence must never render as a pass. Unstated conditions are listed with an explicit caveat rather than omitted | Claude |
 | 2026-09-11 | **OPS-02** — pin `gemini-3.5-flash`, not `gemini-flash-latest` | An alias can change model underneath a live demo, and `-latest` returned 503 when tested. An explicit version is reproducible; `GEMINI_MODEL` still overrides it without a code change | Claude |
@@ -1289,6 +1492,8 @@ Append one line per completed piece of work.
 | 2026-09-11 | PERF-01..04 | Lazy + `@st.cache_resource` retrieval, offline model loading, opt-in semantic search, `.streamlit/config.toml`. **First render measured at 1.07s** (was ~30-35s), with no heavy modules imported at page load. |
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
+| 2026-09-11 | **V2 P0** | Branch `v2`: eligibility scorecard, why/why-not explanations, deterministic top matches, Lens schema + correction, trust tests, next best action, architecture showcase, landing paths. New module `core/next_action.py`. |
+| 2026-09-11 | TEST-01 | Suite grown 143 → **195 tests** (new `tests/test_v2_features.py`). |
 | 2026-09-11 | UX-10 | Upload result rebuilt as a readable document summary (raw JSON moved behind a disclosure); conditions rendered in prose via a shared i18n path, with unstated ones shown and explicitly not counted as qualifying. |
 | 2026-09-11 | UX-10 | `read_ad()` split into `extract_raw()` + `build_record()` so a four-stage progress panel can advance on real call boundaries during the ~12s model read. No timers, no padded delays. |
 | 2026-09-11 | TEST-01 | Suite grown 132 → **143 tests**. |

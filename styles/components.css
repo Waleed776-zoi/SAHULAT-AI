@@ -394,6 +394,109 @@
   padding: .15rem var(--s2); background: var(--bg);
 }
 
+/* ---------- Eligibility scorecard (V2 P0-1) ---------- */
+.sa-score-head {
+  display: flex; align-items: baseline; gap: var(--s3);
+  flex-wrap: wrap; margin-top: var(--s2);
+}
+.sa-score-num {
+  font-family: var(--sa-font-display); font-size: 1.08rem; font-weight: 700;
+  color: var(--ink);
+}
+.sa-score-extra { font-size: .82rem; color: var(--muted); }
+
+/* Proportions of a count, never a "fit" percentage. */
+.sa-score-bar {
+  display: flex; gap: 3px; height: 6px; margin: var(--s2) 0 var(--s4);
+  border-radius: 3px; overflow: hidden; background: var(--border-soft);
+}
+.sa-score-seg { display: block; height: 100%; border-radius: 3px; }
+.seg-met     { background: var(--primary); }
+.seg-unmet   { background: var(--danger); }
+.seg-unknown { background: var(--gold); }
+
+/* Tables may scroll sideways; the page body must not. */
+.sa-scorecard { overflow-x: auto; }
+.sa-scorecard table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.sa-scorecard th {
+  text-align: start; font-size: .72rem; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+  padding: 0 var(--s3) var(--s2) 0; border-bottom: 1px solid var(--border);
+}
+.sa-scorecard td {
+  padding: var(--s3) var(--s3) var(--s3) 0;
+  border-bottom: 1px solid var(--border-soft); vertical-align: top;
+}
+.sa-scorecard tr:last-child td { border-bottom: none; }
+.sa-req { display: block; font-weight: 600; color: var(--ink); }
+.sa-reqsub { display: block; font-size: .78rem; color: var(--muted); margin-top: 2px; }
+.sa-reqval { color: var(--ink-soft); font-weight: 600; }
+.sa-pill {
+  display: inline-block; white-space: nowrap; font-size: .74rem; font-weight: 600;
+  padding: .16rem var(--s3); border-radius: 999px; border: 1px solid transparent;
+}
+.pill-good   { background: var(--primary-soft); color: var(--primary-dark); border-color: #BFDDD1; }
+.pill-no     { background: var(--danger-soft);  color: var(--danger);       border-color: #EFCFCF; }
+.pill-verify { background: var(--gold-soft);    color: #8A5F12;             border-color: #E8D5A8; }
+
+/* ---------- Next best action (V2 P0-6) ---------- */
+.sa-next {
+  border: 1px solid var(--border); border-inline-start: 3px solid var(--border-hover);
+  border-radius: var(--radius-md); background: var(--bg);
+  padding: var(--s3) var(--s4); margin: var(--s4) 0 var(--s2);
+}
+.sa-next.actionable {
+  border-inline-start-color: var(--primary); background: var(--primary-soft);
+}
+.sa-next-label {
+  font-size: .7rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted);
+}
+.sa-next.actionable .sa-next-label { color: var(--primary-dark); }
+.sa-next-body {
+  font-size: .92rem; font-weight: 600; color: var(--ink); margin-top: 2px;
+  line-height: 1.5;
+}
+
+/* ---------- Top matches (V2 P0-3) ---------- */
+.sa-top {
+  height: 100%; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); padding: var(--s4); box-shadow: var(--shadow-soft);
+  transition: transform var(--motion-fast) var(--ease),
+              box-shadow var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease);
+}
+.sa-top:hover {
+  transform: translateY(-2px); box-shadow: var(--shadow-hover);
+  border-color: var(--border-hover);
+}
+.sa-top-rank {
+  font-family: var(--sa-font-display); font-size: .8rem; font-weight: 700;
+  color: var(--primary); letter-spacing: .08em;
+}
+.sa-top-name {
+  font-family: var(--sa-font-display); font-size: 1rem; font-weight: 700;
+  color: var(--ink); line-height: 1.35; margin-top: var(--s1);
+}
+.sa-top-provider { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+.sa-top-status { margin: var(--s3) 0 var(--s2); }
+.sa-top-reason { font-size: .8rem; color: var(--ink-soft); line-height: 1.5; }
+
+/* ---------- Landing benefits (V2 P0-8) ---------- */
+.sa-benefit {
+  border-top: 2px solid var(--primary); padding-top: var(--s3);
+  padding-inline-end: var(--s3);
+}
+.sa-benefit-title { font-weight: 700; font-size: .92rem; color: var(--ink); }
+.sa-benefit-body {
+  font-size: .82rem; color: var(--muted); line-height: 1.55; margin-top: var(--s1);
+}
+
+@media (max-width: 640px) {
+  .sa-scorecard table { font-size: .8rem; }
+  .sa-score-head { gap: var(--s2); }
+}
+
 /* ---------- Footer ---------- */
 .sa-footer {
   margin-top: var(--s10); padding-top: var(--s6);

@@ -318,5 +318,135 @@ class TestExtractionIsReadable(unittest.TestCase):
         self.assertIn("Show exactly what the model returned", labels)
 
 
+class TestV2ResultsPage(unittest.TestCase):
+    """V2 P0-1/2/3/6 reaching the actual page, not just the core modules."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = at_results()
+        cls.body = " ".join(str(m.value) for m in cls.app.markdown)
+
+    def test_page_renders(self):
+        self.assertFalse(self.app.exception)
+
+    def test_top_matches_shortlist_is_shown(self):
+        self.assertIn("sa-top-name", self.body)
+        self.assertIn("sa-top-reason", self.body)
+
+    def test_scorecard_table_is_shown(self):
+        self.assertIn("sa-scorecard", self.body)
+        for column in ("Requirement", "Your information", "Result"):
+            self.assertIn(column, self.body)
+
+    def test_scorecard_rows_carry_a_result_pill(self):
+        pills = re.findall(r'sa-pill (pill-[a-z]+)">([^<]+)<', self.body)
+        self.assertTrue(pills)
+        self.assertTrue(any(label == "Passed" for _, label in pills))
+
+    def test_header_count_matches_the_rows_of_the_first_card(self):
+        """
+        The summary is a count of the rows below it. Rendering them from
+        different places is how they would drift apart.
+        """
+        shown = re.search(r'sa-score-num">(\d+) of (\d+) stated conditions met', self.body)
+        self.assertIsNotNone(shown)
+        # Match the markup, not the stylesheet: the injected CSS contains
+        # every one of these class names too.
+        block = self.body[self.body.index('<div class="sa-scorecard">'):]
+        first_table = block[:block.index("</table>")]
+        passed = first_table.count('sa-pill pill-good')
+        self.assertEqual(int(shown.group(1)), passed)
+
+    def test_no_percentage_match_score_is_claimed(self):
+        self.assertNotIn("% match", self.body)
+        self.assertNotIn("match score", self.body.lower())
+
+    def test_every_result_offers_a_next_step(self):
+        cards = self.body.count('class="sa-result-title"')
+        self.assertGreater(cards, 0)
+        self.assertEqual(self.body.count('class="sa-next-label"'), cards)
+
+    def test_architecture_statement_is_present(self):
+        self.assertIn("AI does not decide your eligibility", self.body)
+
+
+class TestCorrectingAMisreadExtraction(unittest.TestCase):
+    """
+    V2 P0-4: reading a photograph is unreliable, and whatever comes out of it
+    is treated as fact by the rules engine. The correction path is what stops
+    a misread number from silently becoming an eligibility verdict.
+    """
+
+    def setUp(self):
+        from core.ad_reader import build_record
+        # The poster says 60%. The model read 90%.
+        self.record, raw = build_record({
+            "name": "Test scholarship",
+            "category": "scholarship",
+            "eligibility_conditions": {"min_marks_percentage": 90,
+                                       "min_age": 18, "max_age": 30},
+            "extraction_confidence": "medium",
+        })
+        self.app = AppTest.from_file(APP, default_timeout=240)
+        self.app.session_state["uploaded_opportunity"] = self.record
+        self.app.session_state["uploaded_raw"] = raw
+        self.app.session_state["answers"] = {
+            "age": 21, "domicile_province": "Punjab",
+            "education_level": "intermediate", "marks_percentage": 72.0}
+        self.app.session_state["screen_upload"] = True
+        self.app.run()
+
+    def test_correction_changes_the_verdict(self):
+        self.assertEqual(self.app.session_state["upload_match"].overall_status,
+                         "not_eligible")
+        self.app.number_input(key="fix_marks").set_value(60.0).run()
+        self.app.button(key="apply_fixes").click().run()
+        self.assertFalse(self.app.exception)
+        self.assertEqual(self.app.session_state["upload_match"].overall_status,
+                         "eligible")
+
+    def test_correction_does_not_upgrade_trust(self):
+        """
+        A user fixing a typo has not verified the opportunity against the
+        issuing authority. The record stays user_uploaded (Invariant 4).
+        """
+        self.app.number_input(key="fix_marks").set_value(60.0).run()
+        self.app.button(key="apply_fixes").click().run()
+        self.assertEqual(self.record.source_type, "user_uploaded")
+        self.assertFalse(self.record.is_verified())
+
+    def test_the_page_says_it_used_the_corrections(self):
+        self.app.number_input(key="fix_marks").set_value(60.0).run()
+        self.app.button(key="apply_fixes").click().run()
+        body = " ".join(str(m.value) for m in self.app.markdown)
+        self.assertIn("Screened against your corrections", body)
+
+
+class TestV2Landing(unittest.TestCase):
+    """V2 P0-8."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = launch()
+        cls.body = " ".join(str(m.value) for m in cls.app.markdown)
+
+    def test_four_paths_including_the_lens(self):
+        for label in ("Find a scholarship", "Find a job", "Learn a skill",
+                      "Check an advertisement"):
+            self.assertIn(label, self.body)
+
+    def test_empty_category_path_is_disabled_not_hidden(self):
+        """
+        A path that leads nowhere yet should say so rather than vanish - the
+        catalogue being thin is a fact about the data, not a feature to hide.
+        """
+        job_button = [b for b in self.app.button if b.key == "path_job"]
+        self.assertTrue(job_button)
+        self.assertTrue(job_button[0].disabled)
+
+    def test_benefits_row_is_present(self):
+        self.assertIn("sa-benefit", self.body)
+
+
 if __name__ == "__main__":
     unittest.main()

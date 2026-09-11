@@ -13,7 +13,9 @@ import uuid
 from typing import Any, Dict, Tuple
 
 from core.llm_client import extract_opportunity_from_file
-from core.models import EligibilityConditions, Opportunity
+from core.models import (
+    EligibilityConditions, FIELDS_OF_STUDY, GENDERS, Opportunity,
+)
 
 VALID_CATEGORIES = ("scholarship", "job", "skills", "assistance")
 VALID_CONFIDENCE = ("high", "medium", "low")
@@ -36,6 +38,20 @@ def _clean_confidence(value: Any) -> str:
     if isinstance(value, str) and value.strip().lower() in VALID_CONFIDENCE:
         return value.strip().lower()
     return "low"
+
+
+def _clean_choice(value: Any, allowed: tuple) -> Any:
+    """
+    Keep an extracted value only when it matches a vocabulary the rules engine
+    understands. Anything else becomes None.
+
+    Dropping an unrecognised value is deliberate: a mis-mapped gender or field
+    of study would be silently applied as a real eligibility gate, and a wrong
+    gate excludes people. Unread is recoverable; wrong is not.
+    """
+    if isinstance(value, str) and value.strip().lower() in allowed:
+        return value.strip().lower()
+    return None
 
 
 def _clean_str_list(value: Any) -> list:
@@ -78,6 +94,11 @@ def build_record(extracted: Dict[str, Any]) -> Tuple[Opportunity, Dict[str, Any]
         special_quota_note=ec_raw.get("special_quota_note"),
         min_experience_years=ec_raw.get("min_experience_years"),
         application_deadline=ec_raw.get("application_deadline"),
+        # V2 P0-4: only values the engine has a vocabulary for.
+        gender_required=_clean_choice(ec_raw.get("gender_required"), GENDERS),
+        fields_of_study=[f for f in (
+            _clean_choice(v, FIELDS_OF_STUDY) for v in _clean_str_list(
+                ec_raw.get("fields_of_study"))) if f] or None,
     )
 
     opportunity = Opportunity(
@@ -85,7 +106,7 @@ def build_record(extracted: Dict[str, Any]) -> Tuple[Opportunity, Dict[str, Any]
         name=extracted.get("name") or "Untitled uploaded opportunity",
         category=_clean_category(extracted.get("category")),
         provider=extracted.get("provider") or "Unknown (from user upload)",
-        province_scope="",
+        province_scope=extracted.get("province_scope") or "",
         target_group="",
         summary_en=extracted.get("summary_en") or "",
         eligibility_conditions=conditions,

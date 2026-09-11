@@ -323,19 +323,90 @@ _RANK_ORDER = {
 }
 
 
+def _urgency_key(result: MatchResult, today: Optional[date]) -> tuple:
+    """
+    Sooner deadlines first, but only among listings that actually carry one.
+
+    Records with no deadline sort after dated ones rather than being treated
+    as infinitely far away or infinitely urgent - "we don't know" is its own
+    bucket, not a value on the scale.
+    """
+    days = result.days_until_deadline(today)
+    return (1, 0) if days is None else (0, days)
+
+
+def ranking_factors(result: MatchResult, today: Optional[date] = None) -> dict:
+    """
+    The structured reasons this result sits where it does (V2 P0-3).
+
+    Machine values only - core/i18n.describe_ranking_reason() renders them.
+    Returned so the UI can show *why* something is near the top, rather than
+    asking the user to trust an unexplained order.
+    """
+    score = result.scorecard()
+    return {
+        "status": result.overall_status,
+        "met": score["met"],
+        "unmet": score["unmet"],
+        "unknown": score["unknown"],
+        "total": score["total"],
+        "priority_groups": list(result.matched_priority_groups),
+        "days_until_deadline": result.days_until_deadline(today),
+        "listing_closed": result.listing_closed,
+        "required_documents": len(result.opportunity.required_documents),
+    }
+
+
 def evaluate_all(profile: UserProfile, opportunities: List[Opportunity],
                  today: Optional[date] = None) -> List[MatchResult]:
-    """Evaluate a profile against every opportunity, sorted best-match-first."""
+    """
+    Evaluate a profile against every opportunity, sorted best-match-first.
+
+    The order is deterministic and derived only from structured facts - never
+    from a model's opinion (V2 P0-3). In priority order:
+
+      1. eligibility status            - a real match outranks a maybe
+      2. open before closed            - a closed listing cannot be acted on
+      3. deadline urgency              - sooner first, among dated listings
+      4. priority-group matches        - an advantage the user actually holds
+      5. share of conditions confirmed
+      6. number of conditions met
+      7. fewer unknowns                - less homework left for the user
+      8. fewer required documents      - a proxy for how much work applying is,
+                                         NOT a claim about which documents the
+                                         user already has; the app never knows
+                                         that. Late tie-break only.
+      9. name                          - stable, predictable
+    """
     results = [evaluate(profile, o, today=today) for o in opportunities]
     results.sort(key=lambda r: (
         _RANK_ORDER.get(r.overall_status, 3),
         r.listing_closed,                     # open before closed
+        _urgency_key(r, today),               # sooner deadlines first
         -len(r.matched_priority_groups),      # priority-group matches first
         -r.confidence_ratio(),                # more confirmed conditions first
         -r.count(MET),
+        r.count(UNKNOWN),                     # fewer open questions first
+        len(r.opportunity.required_documents),
         r.opportunity.name.lower(),           # stable, predictable tie-break
     ))
     return results
+
+
+def top_matches(results: List[MatchResult], limit: int = 3) -> List[MatchResult]:
+    """
+    The few worth leading with (V2 P0-3).
+
+    Only results that are actionable are eligible for this list: a closed
+    listing or a demonstrable blocker must never be presented as a "top
+    opportunity". If nothing qualifies, this returns empty and the caller
+    shows nothing - padding the list with weak matches to reach three would
+    make the feature worthless exactly when it matters.
+    """
+    shortlist = [r for r in results
+                 if not r.listing_closed
+                 and r.overall_status in (STATUS_ELIGIBLE, STATUS_NEEDS_VERIFICATION)]
+    return shortlist[:limit]
 
 
 def summarize_counts(results: List[MatchResult]) -> dict:

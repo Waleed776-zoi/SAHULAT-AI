@@ -272,6 +272,11 @@ STRICT RULES:
   stated in the document, set it to null. NEVER guess or fill in a
   plausible-sounding value.
 - Do not translate or infer eligibility rules that are not explicitly written.
+- "gender_required" is ONLY for a document that explicitly restricts applications
+  to one gender. A scholarship that merely mentions women, or prioritises them,
+  is NOT gender-restricted: leave it null. Getting this wrong wrongly excludes
+  people, which is worse than leaving a condition unread.
+- "province_scope" is the region the opportunity covers, if the document says so.
 - Return ONLY valid JSON matching this schema, nothing else, no markdown fences:
 
 {
@@ -279,6 +284,7 @@ STRICT RULES:
   "category": one of "scholarship" | "job" | "skills" | "assistance" | null,
   "provider": string or null,
   "summary_en": string or null,
+  "province_scope": string or null,
   "eligibility_conditions": {
     "min_age": number or null,
     "max_age": number or null,
@@ -290,6 +296,8 @@ STRICT RULES:
     "must_not_have_existing_scholarship": boolean or null,
     "employment_status_required": one of "unemployed"|"employed"|"any" or null,
     "min_experience_years": number or null,
+    "gender_required": one of "female"|"male" or null,
+    "fields_of_study": [string] or null,
     "application_deadline": "YYYY-MM-DD" or null
   },
   "required_documents": [string],
