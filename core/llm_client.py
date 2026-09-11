@@ -22,18 +22,27 @@ clearly-labelled message and the rules-based result is unaffected.
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import logging
 import os
+from functools import lru_cache
 from typing import Optional, Dict, Any, List, Tuple
 
 from core.i18n import t
 
 log = logging.getLogger(__name__)
 
-# Overridable without a code change - see PROJECT_TRACKER.md OPS-02, which
-# still requires someone to confirm this against the live API once a key exists.
-DEFAULT_MODEL_NAME = "gemini-2.0-flash"
+# Confirmed against the live API on 2026-09-11 (OPS-02): `gemini-2.0-flash` had
+# been retired and returned 404 for every call. Of the models actually listed
+# for this key, gemini-3.5-flash was the fastest that served BOTH the text and
+# the image path reliably; gemini-3.8-flash and gemini-flash-latest returned
+# 503 under load, and gemini-2.5-flash is closed to new users.
+# Override without a code change via the GEMINI_MODEL env var or secret.
+DEFAULT_MODEL_NAME = "gemini-3.5-flash"
+
+# Verified working alternative if the default is ever overloaded (503):
+#   GEMINI_MODEL=gemini-3.1-flash-lite
 
 SDK_NEW = "google-genai"
 SDK_LEGACY = "google-generativeai"
@@ -59,15 +68,17 @@ def model_name() -> str:
     return _get_secret("GEMINI_MODEL") or DEFAULT_MODEL_NAME
 
 
-def _client() -> Optional[Tuple[str, Any]]:
+@lru_cache(maxsize=2)
+def _build_client(api_key: str) -> Optional[Tuple[str, Any]]:
     """
-    Returns (sdk_flavour, client_object) or None when no key / no SDK.
-    Prefers the current SDK; falls back to the deprecated one.
-    """
-    api_key = _get_api_key()
-    if not api_key:
-        return None
+    Build the SDK client once per process (PERF-05).
 
+    Constructing `genai.Client` costs ~1.5s. `is_ai_available()` is called on
+    every render to draw the AI status chip, so an uncached build added ~3s to
+    every single interaction - but ONLY once a real key was configured, which
+    is why it never showed up during development in mock mode. Cached on the
+    key itself, so rotating the key still rebuilds.
+    """
     try:
         from google import genai  # google-genai (current)
         return SDK_NEW, genai.Client(api_key=api_key)
@@ -88,14 +99,44 @@ def _client() -> Optional[Tuple[str, Any]]:
         return None
 
 
+def _client() -> Optional[Tuple[str, Any]]:
+    """Returns (sdk_flavour, client_object) or None when no key / no SDK."""
+    api_key = _get_api_key()
+    if not api_key:
+        return None
+    return _build_client(api_key)
+
+
 def is_ai_available() -> bool:
-    """True when a real model call could be made. Used by the UI status chip."""
-    return _client() is not None
+    """
+    True when a real model call could be made. Used by the UI status chip.
+
+    Deliberately cheap (PERF-05): a key plus an importable SDK, answered with
+    `find_spec`, which touches no module. Building a client to answer this cost
+    ~3s of first render, because importing `google.genai` (1.45s) and
+    constructing the client (1.45s) both happened before the page could draw.
+
+    The trade-off is that a present-but-malformed key reads as available here.
+    That is safe: every call path is wrapped, so a bad key surfaces as a
+    labelled failure message at the moment of use rather than a crash, and the
+    rules-based result - which is what the product actually promises - is
+    unaffected either way.
+    """
+    if not _get_api_key():
+        return False
+    return any(importlib.util.find_spec(m) is not None
+               for m in ("google.genai", "google.generativeai"))
 
 
 def active_sdk() -> Optional[str]:
-    client = _client()
-    return client[0] if client else None
+    """Which SDK would be used. Does not build a client."""
+    if not _get_api_key():
+        return None
+    if importlib.util.find_spec("google.genai") is not None:
+        return SDK_NEW
+    if importlib.util.find_spec("google.generativeai") is not None:
+        return SDK_LEGACY
+    return None
 
 
 # ---------------------------------------------------------------------------

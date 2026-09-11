@@ -5,6 +5,7 @@ Like the rules-engine tests, these run with no network, no API key and no
 chromadb - the app must stay fully testable offline (Invariant 5).
 """
 import json
+import os
 import unittest
 from unittest import mock
 
@@ -440,6 +441,28 @@ class TestSampleProfile(unittest.TestCase):
         results = evaluate_all(sample_profile(), load_all_opportunities())
         self.assertTrue(any(r.overall_status == STATUS_ELIGIBLE for r in results),
                         "demo profile must not show an empty result page")
+
+
+class TestAvailabilityCheckIsCheap(unittest.TestCase):
+    """
+    PERF-05: `is_ai_available()` is called on every render to draw the AI
+    status chip. It must never build an SDK client to answer - doing so cost
+    ~3s per interaction, and only once a real key was configured, so mock-mode
+    development could not see it.
+    """
+
+    def test_availability_never_builds_a_client(self):
+        from core import llm_client
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}),                 mock.patch.object(llm_client, "_build_client") as build:
+            self.assertTrue(llm_client.is_ai_available())
+            llm_client.active_sdk()
+            build.assert_not_called()
+
+    def test_no_key_means_unavailable(self):
+        from core import llm_client
+        with mock.patch.object(llm_client, "_get_api_key", return_value=None):
+            self.assertFalse(llm_client.is_ai_available())
+            self.assertIsNone(llm_client.active_sdk())
 
 
 if __name__ == "__main__":

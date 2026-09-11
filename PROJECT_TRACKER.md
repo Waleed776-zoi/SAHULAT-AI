@@ -4,7 +4,7 @@
 Companion to `README.md` (which is the *setup* guide). This file is the *work* guide.
 
 - **Created:** 2026-09-10
-- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Interaction refinement pass: checklist fix, visible field states, motion. 37 items closed, 130 tests passing
+- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Interaction refinement pass: checklist fix, visible field states, motion. 38 items closed, 132 tests passing
 - **Baseline audited:** full read of all 10 source files, 5 data files, config, and a live environment verification run.
 
 ---
@@ -54,7 +54,7 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **130/130 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Unit tests | **132/132 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **3** opportunities: `hec_balochistan_fata_ug` (scholarship), `navttc_hunarmand_pakistan` (skills), `peef_punjab_undergraduate` (scholarship) |
 | Job records loaded | **0** — all `njp_jobs_sample.json` entries are `REPLACE ME` placeholders and are correctly skipped by the loader |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
@@ -109,7 +109,7 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | I18N-02 | Eligibility reasons are hardcoded English | `rules_engine.py` + `i18n.py` | **P1** | **DONE** | — |
 | DATA-03 | "Jobs" category is selectable but always returns nothing | data + `app.py` | **P1** | **DONE** | — |
 | OPS-01 | No error handling around any Gemini call | `llm_client.py` | **P1** | **DONE** | — |
-| OPS-02 | Confirm model name against the live API | `llm_client.py` | **P1** | BLOCKED (needs API key) | — |
+| OPS-02 | Confirm model name against the live API | `llm_client.py` | **P1** | **DONE** | — |
 | UX-07 | Document checklist count/bar lagged one interaction behind | `app.py` | **P0** | **DONE** | — |
 | UX-08 | Form fields had no visible boundary until clicked | `styles/` | **P0** | **DONE** | — |
 | UX-09 | No motion system; header was not a distinct layer | `styles/` + `app.py` | **P1** | **DONE** | — |
@@ -132,6 +132,7 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | PERF-03 | Is the vector store worth its cost for a 3-document corpus? | `rag_engine.py` | **P2** | **DONE** | — |
 | OPS-03 | Bare `except` in the Chroma path hides all failure detail | `rag_engine.py` | **P3** | **DONE** | — |
 | PERF-04 | No `.streamlit/config.toml` (usage ping, file watcher over `venv/`) | `.streamlit/` | **P3** | **DONE** | — |
+| PERF-05 | `is_ai_available()` built an SDK client on every render (~3s/interaction, only with a key) | `llm_client.py` | **P1** | **DONE** | — |
 | BUG-07 | `application_deadline` produces no `n/a` check when absent | `rules_engine.py` | **P3** | **DONE** | — |
 | BUG-08 | Misleading detail text on the existing-scholarship check | `rules_engine.py` | **P3** | **DONE** | — |
 | BUG-09 | `st.image(...) if ... else None` used as a statement | `app.py` | **P3** | **DONE** | — |
@@ -385,13 +386,42 @@ A retired or renamed model means every AI feature fails at once — and with OPS
 **Fix approach**
 Check the current model list in Google AI Studio once a key is available, update the constant, and confirm both the text path and the multimodal (image/PDF) path work with the chosen model. Delete the stale comment once resolved.
 
+**Resolved 2026-09-11, against a live key.** The suspicion was justified:
+**`gemini-2.0-flash` no longer exists.** Every call returned `404 NOT_FOUND`.
+Had this gone unnoticed, every AI feature would have failed simultaneously in
+the demo.
+
+Measured across the models actually listed for this key:
+
+| Model | Text | Image | Verdict |
+|---|---|---|---|
+| `gemini-2.0-flash` | 404 | 404 | **retired** |
+| `gemini-2.5-flash` | 404 | — | closed to new users |
+| `gemini-flash-latest` | 503 | — | overloaded; also a moving alias |
+| `gemini-3.8-flash` | 13.0s | 503 | unreliable under load |
+| `gemini-3.6-flash` | 61.1s | 3.6s | works, but text was congested |
+| `gemini-3.1-flash-lite` | 3.2s | 3.5s | reliable — documented fallback |
+| **`gemini-3.5-flash`** | **1.4s** | **3.8s** | **chosen** |
+
+`DEFAULT_MODEL_NAME` is now `gemini-3.5-flash`: fastest of the models that
+served *both* paths reliably. An explicit version is pinned rather than the
+`-latest` alias, so the demo cannot shift underneath us mid-presentation.
+`gemini-3.1-flash-lite` is recorded in the source as the fallback if the
+default is ever overloaded — switchable via `GEMINI_MODEL`, no code change.
+
+**Verified end to end through the app's own functions, not raw SDK calls:**
+`explain_match` in English (8.9s) and Urdu (8.8s), `answer_followup` (5.5s),
+and `read_ad` on a synthetic scholarship poster (8.5s), which correctly
+extracted the domicile, the 60% marks threshold and the Rs. 45,000 income
+ceiling into structured fields.
+
 **Acceptance criteria**
 - [x] Current SDK supported, EOL SDK kept as a fallback.
 - [x] Model name made configurable without a code change (`GEMINI_MODEL`).
 - [x] Inline "confirm before building" comment removed.
-- [ ] Model name confirmed against the live API. **(needs a key)**
-- [ ] A real text generation succeeds. **(needs a key)**
-- [ ] A real image extraction succeeds. **(needs a key)**
+- [x] Model name confirmed against the live API.
+- [x] A real text generation succeeds, in both languages.
+- [x] A real image extraction succeeds.
 
 ---
 
@@ -821,6 +851,54 @@ The chosen model is *multilingual* — it is what would let an Urdu-language que
 
 ---
 
+#### PERF-05 — `is_ai_available()` built an SDK client on every render
+**Area:** `core/llm_client.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
+
+**What was wrong**
+Found while verifying OPS-02, not by looking for it: the moment a real key was
+configured, the test suite went from **15.5s to 200s** and first render from
+1.07s to ~4s.
+
+`is_ai_available()` answered "could we make a real call?" by *constructing an
+SDK client*, and the UI calls it on every render to draw the AI status chip.
+That cost ~1.45s to import `google.genai` plus ~1.45s to build the client —
+roughly **3s added to every single interaction**, including ticking a document
+checkbox.
+
+**Why it stayed hidden**
+With no key, `_client()` returned `None` immediately. The entire cost existed
+only in the configured state — which is to say, only in the demo. All the
+startup work in PERF-01/02 would have been silently undone at the worst moment.
+
+**What was done**
+1. `is_ai_available()` and `active_sdk()` now answer from the key plus
+   `importlib.util.find_spec`, which imports nothing and is free.
+2. Client construction moved to `_build_client()`, `lru_cache`-d on the key, so
+   it happens once per process and only when an AI button is actually pressed.
+
+**Trade-off, accepted deliberately:** a present-but-malformed key now reads as
+"available" on the status chip. That is safe — OPS-01 wraps every call path, so
+a bad key surfaces as a labelled message at the moment of use, and the
+rules-based result the product actually promises is unaffected.
+
+**Measured after**
+
+| | Before (with key) | After |
+|---|---|---|
+| First render | ~4s | **1.64s** |
+| Subsequent rerun | ~3s | **0.17s** |
+| Full test suite | 200.2s | **15.5s** |
+
+Heavy modules imported at first render: **none**.
+
+**Acceptance criteria**
+- [x] The status chip costs no import and no client build.
+- [x] The SDK is imported only when an AI feature is actually used.
+- [x] Client built at most once per process per key.
+- [x] Regression test asserts `is_ai_available()` never calls `_build_client()`.
+
+---
+
 #### PERF-04 — No `.streamlit/config.toml`
 **Area:** `.streamlit/` · **Priority:** P3 · **Status:** **DONE** · **Owner:** —
 
@@ -1086,6 +1164,8 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-11 | **OPS-02** — pin `gemini-3.5-flash`, not `gemini-flash-latest` | An alias can change model underneath a live demo, and `-latest` returned 503 when tested. An explicit version is reproducible; `GEMINI_MODEL` still overrides it without a code change | Claude |
+| 2026-09-11 | **PERF-05** — the status chip may read "available" for a malformed key | The alternative costs ~3s on every interaction to pre-validate. Every call path is wrapped, so a bad key surfaces as a labelled message at the point of use instead | Claude |
 | 2026-09-11 | **UX-09** — no fake "Finding your matches…" delay | The spec asks for the sequence but its own rule 10.1 forbids faking one for instant local work. Rules matching is local and instant; the honest version (count first, then staggered reveal) is implemented instead | Claude |
 | 2026-09-11 | **UX-09** — reveal replay gated in Python, not CSS | Streamlit reruns the script on every interaction, so a CSS-only entrance would replay whenever a checkbox was ticked. A session-state token ties each reveal to a real state change | Claude |
 | 2026-09-11 | **UX-06** — no percentage "profile fit" score | The spec shows one in a mock (17) but warns against implied precision (18). We have no defensible scoring model, and a number would read as an official probability. The per-condition list says more, honestly | Claude |
@@ -1123,6 +1203,10 @@ Append one line per completed piece of work.
 | 2026-09-11 | PERF-01..04 | Lazy + `@st.cache_resource` retrieval, offline model loading, opt-in semantic search, `.streamlit/config.toml`. **First render measured at 1.07s** (was ~30-35s), with no heavy modules imported at page load. |
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
+| 2026-09-11 | OPS-02 | **Unblocked — key configured.** `gemini-2.0-flash` was found to be **retired (404)**; every AI feature would have failed at once. Six candidates measured; `gemini-3.5-flash` chosen and verified on the text, Urdu and image paths. |
+| 2026-09-11 | PERF-05 | **Regression caught during that verification** — `is_ai_available()` built an SDK client on every render, adding ~3s per interaction, but only when a key existed. Made free; client now cached and lazily built. Suite 200s → 15.5s. |
+| 2026-09-11 | *(fixed)* | `.streamlit/secrets.toml` had the key pasted unquoted, so the TOML failed to parse and Streamlit fell back to mock mode without saying why. Quotes added. |
+| 2026-09-11 | TEST-01 | Suite grown 130 → **132 tests**. |
 | 2026-09-11 | UX-07 | **Reported bug fixed** — the document checklist count and bar were written before the checkboxes were read, so they lagged one interaction. Deferred into a reserved container; readiness now rebuilt from the widgets each run. |
 | 2026-09-11 | UX-08 | Every form control given a visible default boundary plus hover, focus and selected states; gender moved to a segmented control. |
 | 2026-09-11 | UX-09 | Stylesheets extracted to `styles/`; header became a distinct navigation layer; category hover, Sahulat Path draw and staggered result reveal added, all gated so they do not replay on unrelated reruns; `prefers-reduced-motion` honoured. |
