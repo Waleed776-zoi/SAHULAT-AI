@@ -24,6 +24,8 @@ PERFORMANCE (PERF-01)
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
 
 from core.ad_reader import read_ad
@@ -100,8 +102,29 @@ FONT_IMPORT = (
     "family=Noto+Nastaliq+Urdu:wght@400;700&display=swap');"
 )
 
+STYLE_DIR = Path(__file__).resolve().parent / "styles"
+STYLESHEETS = ("theme.css", "components.css", "animations.css")
+
+
+@st.cache_data(show_spinner=False)
+def load_stylesheets() -> str:
+    """Concatenate styles/*.css. Cached - read once per process."""
+    parts = []
+    for name in STYLESHEETS:
+        path = STYLE_DIR / name
+        if path.exists():
+            parts.append(path.read_text(encoding="utf-8"))
+    return "\n".join(parts)
+
 
 def inject_css(lang: str) -> None:
+    """
+    Inject the stylesheet.
+
+    Only the language-dependent bits are generated here - fonts and RTL. All
+    static styling lives in styles/*.css (spec 17.1) so it is readable and
+    reviewable instead of buried in a Python f-string.
+    """
     urdu = lang == "ur"
     body_font = ("'Noto Naskh Arabic','Inter',system-ui,sans-serif" if urdu
                  else "'Inter',system-ui,-apple-system,sans-serif")
@@ -111,405 +134,51 @@ def inject_css(lang: str) -> None:
 
     rtl = """
       .stMain .block-container { direction: rtl; text-align: right; }
-      .sa-checkrow, .sa-stepper, .sa-inline-trust, .sa-brandbar { flex-direction: row-reverse; }
-      a[href^="http"], .sa-ltr { direction: ltr; unicode-bidi: embed; display: inline-block; }
+      .sa-checkrow, .sa-stepper, .sa-inline-trust,
+      .sahulat-header-inner, .sahulat-logo { flex-direction: row-reverse; }
+      a[href^="http"], .sa-ltr { direction: ltr; unicode-bidi: embed;
+                                 display: inline-block; }
+      .sahulat-nav a::after { left: auto; right: 0; }
     """ if urdu else ""
 
     st.markdown(
-        f"""
-        <style>
-          {FONT_IMPORT}
-
-          :root {{
-            /* Colour — green is an accent, not the whole interface */
-            --paper:        #F8F8F4;
-            --surface:      #FFFFFF;
-            --surface-soft: #F1F4F1;
-            --ink:          #14211D;
-            --ink-soft:     #40504A;
-            --muted:        #66736D;
-            --border:       #DDE4DF;
-            --border-soft:  #EBF0EC;
-
-            --green-900: #123B32;
-            --green-700: #176B55;
-            --green-600: #198766;
-            --green-100: #E3F2EC;
-
-            --gold-600:  #B98227;
-            --gold-100:  #F7EFD9;
-            --blue-700:  #245B78;
-            --blue-100:  #E8F1F5;
-            --red-700:   #A53D3D;
-            --red-100:   #F8E8E8;
-
-            /* Radius */
-            --r-sm: 8px; --r-md: 14px; --r-lg: 20px; --r-xl: 24px;
-
-            /* Shadow — barely there */
-            --shadow: 0 1px 2px rgba(20,33,29,.04), 0 8px 24px rgba(20,33,29,.05);
-
-            /* Spacing (8px system) */
-            --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px;
-            --s6:32px; --s7:40px; --s8:48px; --s9:64px; --s10:80px;
-          }}
-
-          /* ---------- Base type ----------
-             Set by inheritance plus explicit widget selectors. Do NOT use a
-             broad [class*="st-"] selector here: it also matches Streamlit's
-             Material icon spans, which then render their ligature name as
-             literal text ("keyboard_double_arrow_right"). */
-          html, body, .stApp {{ font-family: {body_font}; }}
-          input, select, textarea, button, .stMarkdown, .stMarkdown p,
-          label, .stSelectbox, .stNumberInput, .stTextInput {{
-            font-family: {body_font};
-          }}
-          /* Belt and braces: never let our font win over an icon font. */
-          [data-testid="stIconMaterial"], span[class*="material-symbols"],
-          .material-icons, .material-icons-outlined {{
-            font-family: 'Material Symbols Rounded','Material Icons' !important;
-          }}
-
-          .stApp {{ background: var(--paper); }}
-          .stMain .block-container {{
-            max-width: 1200px; padding-top: var(--s5); padding-bottom: var(--s9);
-          }}
-
-          h1,h2,h3,.sa-display {{
-            font-family: {display_font}; line-height: {display_lh};
-            color: var(--ink); letter-spacing: -.01em; font-weight: 600;
-          }}
-
-          /* Hide Streamlit chrome that reads as "this is a Streamlit app" */
-          div[data-testid="InputInstructions"] {{ display: none !important; }}
-          [data-testid="stAppDeployButton"], [data-testid="stDecoration"],
-          [data-testid="stStatusWidget"] {{ display: none !important; }}
-          header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
-          #MainMenu {{ visibility: hidden; }}
-
-          /* ---------- Brand bar ---------- */
-          .sa-brandbar {{
-            display: flex; align-items: center; justify-content: space-between;
-            gap: var(--s4); padding: var(--s3) 0 var(--s5);
-            border-bottom: 1px solid var(--border); margin-bottom: var(--s6);
-          }}
-          .sa-brand {{ display: flex; align-items: baseline; gap: var(--s3); }}
-          .sa-brand-name {{
-            font-family: {display_font}; font-size: 1.35rem; font-weight: 700;
-            color: var(--green-900); line-height: {display_lh};
-          }}
-          .sa-brand-ur {{
-            font-family: 'Noto Nastaliq Urdu',serif; font-size: 1.05rem;
-            color: var(--green-700); opacity: .85; line-height: 2;
-          }}
-          .sa-brand-dot {{ color: var(--border); }}
-
-          /* ---------- Hero ---------- */
-          .sa-eyebrow {{
-            font-size: .72rem; font-weight: 600; letter-spacing: .16em;
-            text-transform: uppercase; color: var(--green-700);
-            margin-bottom: var(--s3);
-          }}
-          .sa-hero-title {{
-            font-family: {display_font}; font-weight: 600;
-            font-size: clamp(2rem, 4.4vw, 3.4rem); line-height: {display_lh};
-            color: var(--ink); margin: 0 0 var(--s4); letter-spacing: -.02em;
-          }}
-          .sa-hero-body {{
-            font-size: 1.05rem; line-height: 1.62; color: var(--ink-soft);
-            max-width: 60ch; margin: 0 0 var(--s5);
-          }}
-          .sa-inline-trust {{
-            display: flex; flex-wrap: wrap; gap: var(--s5);
-            margin-top: var(--s5); padding-top: var(--s4);
-            border-top: 1px solid var(--border);
-          }}
-          .sa-trust-item {{
-            font-size: .84rem; color: var(--ink-soft); font-weight: 500;
-            display: inline-flex; align-items: center; gap: var(--s2);
-          }}
-          .sa-trust-item::before {{
-            content: "✓"; color: var(--green-600); font-weight: 700;
-          }}
-
-          /* ---------- Sections ---------- */
-          .sa-section-label {{
-            font-size: .72rem; font-weight: 600; letter-spacing: .16em;
-            text-transform: uppercase; color: var(--muted);
-            margin: var(--s9) 0 var(--s4);
-          }}
-          .sa-section-title {{
-            font-family: {display_font}; font-size: 1.65rem; font-weight: 600;
-            color: var(--ink); margin: 0 0 var(--s2); line-height: {display_lh};
-          }}
-          .sa-section-lede {{
-            color: var(--ink-soft); font-size: .98rem; max-width: 68ch;
-            line-height: 1.6; margin: 0 0 var(--s5);
-          }}
-          .sa-rule {{ height:1px; background: var(--border-soft); margin: var(--s5) 0; }}
-
-          /* ---------- Surfaces ---------- */
-          .sa-panel {{
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--r-md); padding: var(--s6);
-          }}
-          .sa-panel-head {{ margin-bottom: var(--s4); }}
-          .sa-panel-title {{
-            font-family: {display_font}; font-size: 1.5rem; font-weight: 600;
-            color: var(--ink); margin: 0; line-height: {display_lh};
-          }}
-          .sa-panel-caption {{
-            color: var(--muted); font-size: .9rem; line-height: 1.55;
-            margin: var(--s2) 0 0; max-width: 62ch;
-          }}
-          .sa-stepcount {{
-            font-size: .7rem; font-weight: 600; letter-spacing: .14em;
-            text-transform: uppercase; color: var(--green-700);
-            margin-bottom: var(--s2);
-          }}
-
-          /* ---------- Journey / numbered items ---------- */
-          .sa-journey {{ display: grid; gap: var(--s4); }}
-          .sa-journey-item {{
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--r-md); padding: var(--s5);
-          }}
-          .sa-num {{
-            font-family: {display_font}; font-size: .95rem; font-weight: 700;
-            color: var(--green-600); letter-spacing: .04em; display: block;
-            margin-bottom: var(--s2);
-          }}
-          .sa-item-title {{
-            font-weight: 600; font-size: .98rem; color: var(--ink);
-            margin-bottom: var(--s1);
-          }}
-          .sa-item-body {{ font-size: .86rem; color: var(--muted); line-height: 1.55; }}
-
-          /* ---------- Stepper ---------- */
-          .sa-stepper {{
-            display: flex; gap: var(--s1); margin-bottom: var(--s5);
-            border: 1px solid var(--border); background: var(--surface);
-            border-radius: var(--r-md); padding: var(--s2);
-          }}
-          .sa-stepitem {{
-            flex: 1 1 0; display: flex; align-items: center; gap: var(--s2);
-            padding: var(--s2) var(--s3); border-radius: var(--r-sm); min-width: 0;
-          }}
-          .sa-stepitem.current {{ background: var(--green-100); }}
-          .sa-stepnum {{
-            flex: 0 0 auto; width: 1.5rem; height: 1.5rem; border-radius: 50%;
-            display: inline-flex; align-items: center; justify-content: center;
-            font-size: .74rem; font-weight: 700; border: 1.5px solid var(--border);
-            color: var(--muted); background: var(--surface);
-          }}
-          .sa-stepitem.current .sa-stepnum {{
-            background: var(--green-700); border-color: var(--green-700); color: #fff;
-          }}
-          .sa-stepitem.done .sa-stepnum {{
-            background: var(--green-600); border-color: var(--green-600); color: #fff;
-          }}
-          .sa-steplabel {{
-            font-size: .8rem; font-weight: 600; color: var(--muted);
-            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-          }}
-          .sa-stepitem.current .sa-steplabel {{ color: var(--green-900); }}
-          .sa-stepitem.done .sa-steplabel {{ color: var(--ink-soft); }}
-
-          /* ---------- Field markers ---------- */
-          .sa-tagrow {{ margin-bottom: -.5rem; }}
-          .sa-tag {{
-            font-size: .62rem; font-weight: 700; letter-spacing: .09em;
-            text-transform: uppercase; padding: .12rem .4rem; border-radius: var(--r-sm);
-          }}
-          .sa-tag.req {{ background: var(--green-100); color: var(--green-900); }}
-          .sa-tag.opt {{ background: var(--surface-soft); color: var(--muted); }}
-          .sa-fielderror {{
-            color: var(--red-700); font-size: .8rem; font-weight: 500;
-            margin: var(--s1) 0 var(--s3);
-          }}
-
-          /* ---------- Badges ---------- */
-          .sa-badge {{
-            display: inline-block; padding: .2rem .55rem; border-radius: var(--r-sm);
-            font-size: .72rem; font-weight: 600; border: 1px solid; white-space: nowrap;
-          }}
-          .tone-good   {{ background: var(--green-100); color: var(--green-900); border-color: #BFDECF; }}
-          .tone-verify {{ background: var(--gold-100);  color: var(--gold-600);  border-color: #E6D6AC; }}
-          .tone-no     {{ background: var(--red-100);   color: var(--red-700);   border-color: #E9CACA; }}
-          .tone-info   {{ background: var(--blue-100);  color: var(--blue-700);  border-color: #CFE0E9; }}
-          .tone-mute   {{ background: var(--surface-soft); color: var(--muted);  border-color: var(--border); }}
-
-          /* ---------- Result rows (editorial list, not a card grid) ---------- */
-          .sa-result-rank {{
-            font-family: {display_font}; font-size: 1.5rem; font-weight: 700;
-            color: var(--border); line-height: 1;
-          }}
-          .sa-result-title {{
-            font-family: {display_font}; font-size: 1.2rem; font-weight: 600;
-            color: var(--ink); line-height: 1.3; margin: 0;
-          }}
-          .sa-result-authority {{
-            font-size: .82rem; color: var(--muted); margin-top: var(--s1);
-          }}
-          .sa-first-note {{
-            font-size: .84rem; color: var(--green-700); font-weight: 600;
-            margin-bottom: var(--s2);
-          }}
-
-          /* ---------- Condition rows ---------- */
-          .sa-checkrow {{
-            display: flex; align-items: flex-start; gap: var(--s3);
-            padding: var(--s2) 0; border-bottom: 1px solid var(--border-soft);
-          }}
-          .sa-checkrow:last-child {{ border-bottom: none; }}
-          .sa-mark {{
-            flex: 0 0 auto; width: 1.15rem; height: 1.15rem; border-radius: var(--r-sm);
-            display: inline-flex; align-items: center; justify-content: center;
-            font-size: .7rem; font-weight: 700; margin-top: .15rem;
-          }}
-          .mark-good   {{ background: var(--green-100); color: var(--green-700); }}
-          .mark-no     {{ background: var(--red-100);   color: var(--red-700); }}
-          .mark-verify {{ background: var(--gold-100);  color: var(--gold-600); }}
-          .sa-checkname {{ font-size: .87rem; font-weight: 600; color: var(--ink); }}
-          .sa-checkdetail {{ font-size: .8rem; color: var(--muted); }}
-
-          /* ---------- Source provenance ---------- */
-          .sa-source {{
-            border: 1px solid var(--border); border-radius: var(--r-md);
-            padding: var(--s4); background: var(--surface-soft);
-          }}
-          .sa-source.verified {{ background: var(--gold-100); border-color: #E6D6AC; }}
-          .sa-source-label {{
-            font-size: .66rem; font-weight: 700; letter-spacing: .14em;
-            text-transform: uppercase; color: var(--muted); margin-bottom: var(--s2);
-          }}
-          .sa-source-name {{ font-weight: 600; font-size: .92rem; color: var(--ink); }}
-          .sa-source-meta {{ font-size: .8rem; color: var(--muted); margin-top: var(--s1); }}
-
-          /* ---------- Callouts ---------- */
-          .sa-callout {{
-            border-inline-start: 3px solid var(--green-600);
-            background: var(--green-100); padding: var(--s3) var(--s4);
-            border-radius: var(--r-sm); font-size: .86rem; color: var(--ink-soft);
-            margin: var(--s3) 0; line-height: 1.55;
-          }}
-          .sa-callout.verify {{ border-color: var(--gold-600); background: var(--gold-100); }}
-          .sa-callout.info   {{ border-color: var(--blue-700); background: var(--blue-100); }}
-          .sa-callout-title {{
-            font-weight: 700; color: var(--ink); display: block; margin-bottom: var(--s1);
-          }}
-
-          /* ---------- Timeline ---------- */
-          .sa-timeline {{ position: relative; padding-inline-start: var(--s5); }}
-          .sa-timeline::before {{
-            content: ""; position: absolute; inset-inline-start: 6px; top: 6px;
-            bottom: 6px; width: 1px; background: var(--border);
-          }}
-          .sa-tl-item {{ position: relative; padding-bottom: var(--s4); }}
-          .sa-tl-item::before {{
-            content: ""; position: absolute; inset-inline-start: calc(-1 * var(--s5) + 3px);
-            top: .35rem; width: 7px; height: 7px; border-radius: 50%;
-            background: var(--green-600);
-          }}
-          .sa-tl-step {{
-            font-size: .66rem; font-weight: 700; letter-spacing: .12em;
-            text-transform: uppercase; color: var(--green-700);
-          }}
-          .sa-tl-body {{ font-size: .86rem; color: var(--ink-soft); line-height: 1.55; }}
-
-          /* ---------- Stats ---------- */
-          .sa-stat-num {{
-            font-family: {display_font}; font-size: 2rem; font-weight: 700;
-            color: var(--green-900); line-height: 1;
-          }}
-          .sa-stat-label {{ font-size: .8rem; color: var(--muted); margin-top: var(--s1); }}
-
-          /* ---------- Answer summary ---------- */
-          .sa-answer {{
-            display: flex; justify-content: space-between; gap: var(--s4);
-            padding: .3rem 0; border-bottom: 1px solid var(--border-soft); font-size: .83rem;
-          }}
-          .sa-answer:last-child {{ border-bottom: none; }}
-          .sa-answer-label {{ color: var(--muted); }}
-          .sa-answer-value {{ color: var(--ink); font-weight: 600; text-align: end; }}
-
-          /* ---------- Footer ---------- */
-          .sa-footer {{
-            margin-top: var(--s10); padding-top: var(--s6);
-            border-top: 1px solid var(--border); color: var(--muted); font-size: .84rem;
-          }}
-          .sa-footer-brand {{
-            font-family: {display_font}; font-size: 1.1rem; font-weight: 700;
-            color: var(--green-900);
-          }}
-          .sa-footer-head {{
-            font-size: .68rem; font-weight: 700; letter-spacing: .14em;
-            text-transform: uppercase; color: var(--ink-soft); margin-bottom: var(--s2);
-          }}
-          .sa-footer-note {{
-            margin-top: var(--s5); padding-top: var(--s4);
-            border-top: 1px solid var(--border-soft); font-size: .8rem; max-width: 78ch;
-          }}
-
-          /* ---------- Streamlit widget restyling ---------- */
-          .stButton > button {{
-            border-radius: var(--r-sm); font-weight: 600; font-size: .88rem;
-            padding: .55rem 1.15rem; border: 1px solid var(--border);
-            color: var(--ink); background: var(--surface); transition: all .15s ease;
-          }}
-          .stButton > button:hover {{
-            border-color: var(--green-600); color: var(--green-900);
-            transform: translateY(-1px);
-          }}
-          .stButton > button[kind="primary"] {{
-            background: var(--green-700); border-color: var(--green-700); color: #fff;
-          }}
-          .stButton > button[kind="primary"]:hover {{
-            background: var(--green-900); border-color: var(--green-900); color: #fff;
-          }}
-          .stDownloadButton > button {{ border-radius: var(--r-sm); font-weight: 600; }}
-          div[data-testid="stExpander"] {{
-            border: 1px solid var(--border); border-radius: var(--r-md);
-            background: var(--surface); box-shadow: none;
-          }}
-          div[data-testid="stExpander"] summary {{ font-weight: 600; font-size: .92rem; }}
-          .stTabs [data-baseweb="tab-list"] {{
-            gap: var(--s5); border-bottom: 1px solid var(--border);
-          }}
-          .stTabs [data-baseweb="tab"] {{
-            font-weight: 600; font-size: .92rem; padding: var(--s3) 0;
-            color: var(--muted);
-          }}
-          .stTabs [aria-selected="true"] {{ color: var(--green-900); }}
-          div[data-baseweb="select"] > div {{
-            border-radius: var(--r-sm); border-color: var(--border);
-            background: var(--surface);
-          }}
-          .stNumberInput input, .stTextInput input {{
-            border-radius: var(--r-sm); background: var(--surface);
-          }}
-          .stProgress > div > div > div {{ background: var(--green-600); }}
-          :focus-visible {{ outline: 2px solid var(--green-600); outline-offset: 2px; }}
-
-          /* ---------- Responsive ---------- */
-          @media (max-width: 640px) {{
-            .stMain .block-container {{ padding-left: var(--s4); padding-right: var(--s4); }}
-            .sa-hero-title {{ font-size: 1.85rem; }}
-            .sa-stepper {{ overflow-x: auto; }}
-            .sa-steplabel {{ display: none; }}
-            .sa-stepitem {{ flex: 0 0 auto; }}
-            .sa-inline-trust {{ gap: var(--s3); }}
-            .sa-panel {{ padding: var(--s4); }}
-          }}
-          @media (prefers-reduced-motion: reduce) {{
-            * {{ transition: none !important; animation: none !important; }}
-            .stButton > button:hover {{ transform: none; }}
-          }}
-          {rtl}
-        </style>
-        """,
+        f"<style>{FONT_IMPORT}\n"
+        f":root {{ --sa-font-body: {body_font};"
+        f" --sa-font-display: {display_font};"
+        f" --sa-display-lh: {display_lh}; }}\n"
+        f"{load_stylesheets()}\n{rtl}</style>",
         unsafe_allow_html=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# Motion gating
+#
+# Streamlit reruns the script on every interaction. A CSS entrance animation
+# would therefore replay every time a checkbox is ticked. These helpers make a
+# reveal play once per real state change (spec 17.2/17.3).
+# ---------------------------------------------------------------------------
+
+def should_animate(token: str) -> bool:
+    seen = st.session_state.setdefault("animated_tokens", set())
+    if token in seen:
+        return False
+    seen.add(token)
+    return True
+
+
+def reveal(token: str, position: int = 1) -> str:
+    """CSS classes for a staggered block entrance, or "" if already played."""
+    if not should_animate(token):
+        return ""
+    return f"sahulat-reveal sahulat-stagger-{min(position, 6)}"
+
+
+def results_token() -> str:
+    """Changes whenever the answers or chosen categories change."""
+    answers = st.session_state.answers
+    return repr(sorted((k, str(v)) for k, v in answers.items())) + \
+        repr(sorted(st.session_state.categories))
 
 
 # ---------------------------------------------------------------------------
@@ -597,6 +266,68 @@ def opportunity_map_svg(lang: str) -> str:
     """
 
 
+# One consistent icon family: thin stroked line marks, no emoji (spec 7).
+def _icon(paths: str) -> str:
+    return ('<svg class="sahulat-category-icon" width="24" height="24" '
+            'viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+            'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" '
+            f'aria-hidden="true">{paths}</svg>')
+
+
+CATEGORY_ICONS = {
+    "scholarship": _icon('<path d="M22 10 12 5 2 10l10 5 10-5Z"/>'
+                         '<path d="M6 12v5c3 2 9 2 12 0v-5"/>'),
+    "job": _icon('<rect x="2" y="7" width="20" height="14" rx="2"/>'
+                 '<path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>'),
+    "skills": _icon('<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0'
+                    'l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3'
+                    'l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/>'),
+    "assistance": _icon('<path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/>'
+                        '<path d="M9 21v-6h6v6"/>'),
+}
+
+
+def sahulat_path_svg(lang: str) -> str:
+    """
+    The Sahulat Path: Profile -> Rules -> Evidence -> Action, drawn once.
+
+    The recurring identity motif. Desktop horizontal; a vertical timeline takes
+    over below 640px (spec 6 and 8).
+    """
+    labels = [t(f"journey_{i}_title", lang) for i in (1, 2, 3, 4)]
+    animate = should_animate("sahulat_path")
+    line_class = "sahulat-path-line" if animate else ""
+    xs = [90, 310, 530, 750]
+    nodes = []
+    for index, (x, label) in enumerate(zip(xs, labels), start=1):
+        node_class = f"sahulat-path-node sahulat-path-node-{index}" if animate else ""
+        nodes.append(
+            f'<g class="{node_class}">'
+            f'<circle cx="{x}" cy="44" r="9" fill="#176B55"/>'
+            f'<circle cx="{x}" cy="44" r="3.4" fill="#FFFFFF"/>'
+            f'<text x="{x}" y="24" text-anchor="middle" font-size="12"'
+            f' font-weight="700" fill="#176B55"'
+            f' font-family="Inter,system-ui,sans-serif">0{index}</text>'
+            f'<text x="{x}" y="72" text-anchor="middle" font-size="13"'
+            f' fill="#14211D" font-family="Inter,system-ui,sans-serif">{label}</text>'
+            f'</g>')
+    return (f'<svg class="sahulat-path" viewBox="0 0 840 92" role="img" '
+            f'aria-label="{t("journey_line", lang)}">'
+            f'<line class="{line_class}" x1="90" y1="44" x2="750" y2="44" '
+            f'stroke="#DDE4DF" stroke-width="1.5"/>'
+            f'{"".join(nodes)}</svg>')
+
+
+def sahulat_path_vertical(lang: str) -> str:
+    """Mobile fallback: the same journey as a vertical timeline (spec 8)."""
+    items = "".join(
+        f'<div class="sa-tl-item"><div class="sa-tl-step">0{i}</div>'
+        f'<div class="sa-item-title">{t(f"journey_{i}_title", lang)}</div>'
+        f'<div class="sa-tl-body">{t(f"journey_{i}_body", lang)}</div></div>'
+        for i in (1, 2, 3, 4))
+    return f'<div class="sahulat-path-mobile sahulat-timeline">{items}</div>'
+
+
 # ---------------------------------------------------------------------------
 # Session state
 # ---------------------------------------------------------------------------
@@ -653,6 +384,10 @@ def start_over() -> None:
     st.session_state.step = 0
     st.session_state.step_errors = {}
     st.session_state.view = "home"
+    st.session_state.documents_ready = {}
+    # Starting over is a fresh journey, so let the reveals play again. Without
+    # this, re-running the same profile would land on a static page.
+    st.session_state.animated_tokens = set()
     st.rerun()
 
 
@@ -669,30 +404,54 @@ health = catalogue_health(opportunities)
 # Brand bar  (replaces the sidebar entirely - spec sections 12 and 31)
 # ---------------------------------------------------------------------------
 
-brand_col, lang_col = st.columns([5, 2])
-with brand_col:
+LOGO_MARK = (
+    '<svg class="sahulat-logo-mark" viewBox="0 0 24 24" fill="none" '
+    'stroke="#176B55" stroke-width="2" stroke-linecap="round" aria-hidden="true">'
+    '<path d="M3 20 C 9 20, 9 4, 15 4"/><circle cx="3" cy="20" r="1.6" fill="#176B55"/>'
+    '<circle cx="15" cy="4" r="1.6" fill="#123B32"/><path d="M18 9 L21 4 L21 9 Z" '
+    'fill="#B98227" stroke="none"/></svg>'
+)
+
+
+def render_header() -> None:
+    """A distinct navigation layer, not another white block (spec 4)."""
     st.markdown(
-        f'<div class="sa-brand">'
-        f'<span class="sa-brand-name">{t("app_title", lang)}</span>'
-        f'<span class="sa-brand-dot">·</span>'
-        f'<span class="sa-brand-ur">{t("brand_urdu", lang)}</span></div>',
+        f'<div class="sahulat-header"><div class="sahulat-header-inner">'
+        f'<div class="sahulat-logo">{LOGO_MARK}'
+        f'<span class="sahulat-logo-name">{t("app_title", lang)}</span>'
+        f'<span class="sahulat-logo-sep">·</span>'
+        f'<span class="sahulat-logo-ur">{t("brand_urdu", lang)}</span></div>'
+        f'<nav class="sahulat-nav">'
+        f'<a href="#discover">{t("nav_discover", lang)}</a>'
+        f'<a href="#how">{t("nav_how", lang)}</a>'
+        f'<a href="#privacy">{t("privacy_heading", lang)}</a>'
+        f'</nav></div></div>',
         unsafe_allow_html=True,
     )
-with lang_col:
-    en_col, ur_col = st.columns(2)
-    with en_col:
-        if st.button("English", key="lang_en", use_container_width=True,
-                     type="primary" if lang == "en" else "secondary"):
-            st.session_state.language = "en"
-            st.rerun()
-    with ur_col:
-        if st.button("اردو", key="lang_ur", use_container_width=True,
-                     type="primary" if lang == "ur" else "secondary"):
-            st.session_state.language = "ur"
-            st.rerun()
 
-st.markdown('<div style="border-bottom:1px solid var(--border);margin-bottom:2rem"></div>',
-            unsafe_allow_html=True)
+
+render_header()
+
+_, lang_en_col, lang_ur_col, cta_col = st.columns([4, 1, 1, 2])
+with lang_en_col:
+    if st.button("EN", key="lang_en", use_container_width=True,
+                 type="primary" if lang == "en" else "secondary"):
+        st.session_state.language = "en"
+        st.rerun()
+with lang_ur_col:
+    if st.button("اردو", key="lang_ur", use_container_width=True,
+                 type="primary" if lang == "ur" else "secondary"):
+        st.session_state.language = "ur"
+        st.rerun()
+with cta_col:
+    if st.session_state.view == "home":
+        if st.button(t("cta_start", lang), key="header_cta",
+                     type="primary", use_container_width=True):
+            go_to(0)
+    else:
+        if st.button(t("nav_start_over", lang), key="header_restart",
+                     use_container_width=True):
+            start_over()
 
 
 # ---------------------------------------------------------------------------
@@ -758,32 +517,27 @@ def render_home() -> None:
 
     # -- what can you find --
     section_label(t("find_heading", lang))
-    find_cols = st.columns(len(KNOWN_CATEGORIES))
-    for column, category in zip(find_cols, KNOWN_CATEGORIES):
+    for position, (column, category) in enumerate(
+            zip(st.columns(len(KNOWN_CATEGORIES)), KNOWN_CATEGORIES), start=1):
         available = counts.get(category, 0)
         chip = (badge(t("available_count", lang, n=available), "tone-good") if available
                 else badge(t("coming_soon", lang), "tone-mute"))
         with column:
             st.markdown(
-                f'<div class="sa-journey-item">'
-                f'<div class="sa-item-title">{t(f"category_{category}", lang)}</div>'
-                f'<div class="sa-item-body">{t(f"find_{category}", lang)}</div>'
-                f'<div style="margin-top:.6rem">{chip}</div></div>',
+                f'<div class="sahulat-category {reveal("home_cat", position)}">'
+                f'{CATEGORY_ICONS.get(category, "")}'
+                f'<div class="sahulat-category-name">{t(f"category_{category}", lang)}</div>'
+                f'<div class="sahulat-category-accent"></div>'
+                f'<div class="sahulat-category-body">{t(f"find_{category}", lang)}</div>'
+                f'<div style="margin-top:.7rem">{chip}</div></div>',
                 unsafe_allow_html=True,
             )
 
-    # -- journey --
+    # -- the Sahulat Path: a connected journey, not four isolated cards --
     section_label(t("journey_heading", lang))
     section_title(t("journey_line", lang))
-    journey_cols = st.columns(4)
-    for index, column in enumerate(journey_cols, start=1):
-        with column:
-            st.markdown(
-                f'<div class="sa-journey-item"><span class="sa-num">0{index}</span>'
-                f'<div class="sa-item-title">{t(f"journey_{index}_title", lang)}</div>'
-                f'<div class="sa-item-body">{t(f"journey_{index}_body", lang)}</div></div>',
-                unsafe_allow_html=True,
-            )
+    st.markdown(sahulat_path_svg(lang), unsafe_allow_html=True)
+    st.markdown(sahulat_path_vertical(lang), unsafe_allow_html=True)
 
     # -- three principles --
     section_label(t("principles_heading", lang))
@@ -946,8 +700,16 @@ def render_step_about(errors: dict) -> None:
         field_error("age", errors, lang)
 
         field_tag(lang=lang)
-        optional_select(t("field_gender", lang), "gender", GENDERS,
-                        lambda v: gender_label(v, lang))
+        # Clearly separated, tappable options rather than an ambiguous
+        # dropdown (spec 9.4). Selecting nothing means "prefer not to say".
+        current_gender = st.session_state.answers.get("gender")
+        chosen_gender = st.segmented_control(
+            t("field_gender", lang), options=list(GENDERS),
+            format_func=lambda v: gender_label(v, lang),
+            default=current_gender if current_gender in GENDERS else None,
+            key=f"w_gender_{st.session_state.step}",
+        )
+        record("gender", chosen_gender)
         st.caption(t("field_gender_help", lang))
     with col2:
         field_tag(required=True, lang=lang)
@@ -1082,34 +844,51 @@ def render_source_card(opportunity) -> None:
     status = t("source_verified", lang) if verified else t("source_needs_check", lang)
     meta = (f'{t("source_last_checked", lang)}: {opportunity.last_verified}'
             if verified else t("source_not_checked", lang))
+    link = ""
+    if opportunity.official_url:
+        link = (f'<a class="sa-source-link" href="{opportunity.official_url}"'
+                f' target="_blank" rel="noopener">{t("open_official_site", lang)}'
+                f' <span class="sa-arrow">↗</span></a>')
     st.markdown(
-        f'<div class="sa-source{" verified" if verified else ""}">'
+        f'<div class="sahulat-source{" verified" if verified else ""}">'
         f'<div class="sa-source-label">{t("source_heading", lang)} — {status}</div>'
         f'<div class="sa-source-name">{opportunity.provider}</div>'
         f'<div class="sa-source-meta">{opportunity.source_title or ""}</div>'
-        f'<div class="sa-source-meta">{meta}</div></div>',
+        f'<div class="sa-source-meta">{meta}</div>{link}</div>',
         unsafe_allow_html=True)
     if not verified:
         st.caption(t("source_verify_body", lang))
-    if opportunity.official_url:
-        st.markdown(f'<a href="{opportunity.official_url}" target="_blank">'
-                    f'{t("open_official_site", lang)} ↗</a>', unsafe_allow_html=True)
 
 
 def render_documents(opportunity) -> None:
+    """
+    Document readiness.
+
+    ORDERING MATTERS (UX-07): the count and the progress bar must be written
+    AFTER the checkboxes have been read, otherwise they render the previous
+    run's state and lag one interaction behind - ticking the last box left the
+    bar short, and unticking one left it full. A container reserved above the
+    list lets us write into it once the true count is known.
+    """
     if not opportunity.required_documents:
         return
-    ready = st.session_state.documents_ready.setdefault(opportunity.opportunity_id, set())
+
     total = len(opportunity.required_documents)
     st.markdown(f"**{t('document_checklist_heading', lang)}**")
-    st.caption(t("documents_ready", lang, have=len(ready), total=total))
-    st.progress(len(ready) / total)
+    summary_slot = st.container()          # filled in below, once we know the count
+
+    previously_ready = st.session_state.documents_ready.get(
+        opportunity.opportunity_id, set())
+    ready = set()
     for index, document in enumerate(opportunity.required_documents):
-        if st.checkbox(document, value=index in ready,
+        if st.checkbox(document, value=index in previously_ready,
                        key=f"doc_{opportunity.opportunity_id}_{index}"):
             ready.add(index)
-        else:
-            ready.discard(index)
+    st.session_state.documents_ready[opportunity.opportunity_id] = ready
+
+    with summary_slot:
+        st.caption(t("documents_ready", lang, have=len(ready), total=total))
+        st.progress(len(ready) / total)
 
 
 def render_timeline(opportunity) -> None:
@@ -1117,7 +896,7 @@ def render_timeline(opportunity) -> None:
         return
     st.markdown(f"**{t('timeline_heading', lang)}**")
     st.markdown(
-        '<div class="sa-timeline">'
+        '<div class="sahulat-timeline">'
         + "".join(f'<div class="sa-tl-item"><div class="sa-tl-step">'
                   f'{index:02d}</div><div class="sa-tl-body">{step}</div></div>'
                   for index, step in enumerate(opportunity.application_steps, 1))
@@ -1131,7 +910,7 @@ def render_pipeline() -> None:
         steps = ["pipeline_profile", "pipeline_rules", "pipeline_match",
                  "pipeline_retrieval", "pipeline_explain"]
         st.markdown(
-            '<div class="sa-timeline">'
+            '<div class="sahulat-timeline">'
             + "".join(f'<div class="sa-tl-item"><div class="sa-tl-step">{i:02d}</div>'
                       f'<div class="sa-tl-body">{t(key, lang)}</div></div>'
                       for i, key in enumerate(steps, 1))
@@ -1154,8 +933,12 @@ def listing_badge(match) -> str:
     return badge(label, LISTING_CLASS.get(state, "tone-verify"))
 
 
-def render_match_card(match, rank: int = 0, highlight: bool = False) -> None:
+def render_match_card(match, rank: int = 0, highlight: bool = False,
+                      animation: str = "") -> None:
     opportunity = match.opportunity
+    if animation:
+        # Information arriving, not cards falling. Plays once per result set.
+        st.markdown(f'<div class="{animation}">', unsafe_allow_html=True)
     with st.container(border=True):
         head_col, badge_col = st.columns([3, 2])
         with head_col:
@@ -1220,6 +1003,8 @@ def render_match_card(match, rank: int = 0, highlight: bool = False) -> None:
                         build_result_summary(match), lang)
             if explain_key in st.session_state.explanations:
                 st.info(st.session_state.explanations[explain_key])
+    if animation:
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def build_result_summary(match) -> str:
@@ -1306,17 +1091,24 @@ def render_results() -> None:
 
     results = evaluate_all(profile, filtered)
     totals = summarize_counts(results)
+    token = results_token()
 
     if st.session_state.is_demo:
         st.markdown(badge(t("demo_badge", lang), "tone-info"), unsafe_allow_html=True)
         st.caption(t("demo_note", lang))
 
+    # The count lands first, then the cards arrive - hierarchy, not decoration.
+    heading_reveal = reveal(f"{token}:heading", 1)
+    if heading_reveal:
+        st.markdown(f'<div class="{heading_reveal}">', unsafe_allow_html=True)
     headline = (t("results_found_one", lang) if len(results) == 1
                 else t("results_found", lang, n=len(results)))
     section_title(headline, t("results_breakdown", lang,
                               strong=totals[STATUS_ELIGIBLE],
                               verify=totals[STATUS_NEEDS_VERIFICATION],
                               no=totals[STATUS_NOT_ELIGIBLE]))
+    if heading_reveal:
+        st.markdown("</div>", unsafe_allow_html=True)
 
     render_answer_summary(profile)
     if completion_percent(profile) < 70:
@@ -1338,8 +1130,10 @@ def render_results() -> None:
                     unsafe_allow_html=True)
         for match in group:
             rank += 1
-            render_match_card(match, rank=rank,
-                              highlight=(rank == 1 and status == STATUS_ELIGIBLE))
+            render_match_card(
+                match, rank=rank,
+                highlight=(rank == 1 and status == STATUS_ELIGIBLE),
+                animation=reveal(f"{token}:card", rank))
 
     rule()
     render_pipeline()

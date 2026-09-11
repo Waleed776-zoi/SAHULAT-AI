@@ -4,7 +4,7 @@
 Companion to `README.md` (which is the *setup* guide). This file is the *work* guide.
 
 - **Created:** 2026-09-10
-- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Civic Intelligence redesign, guided wizard, richer screening fields. 34 items closed, 118 tests passing
+- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Interaction refinement pass: checklist fix, visible field states, motion. 37 items closed, 130 tests passing
 - **Baseline audited:** full read of all 10 source files, 5 data files, config, and a live environment verification run.
 
 ---
@@ -54,7 +54,7 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **118/118 pass** — `Ran 118 tests in 0.051s / OK` |
+| Unit tests | **130/130 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **3** opportunities: `hec_balochistan_fata_ug` (scholarship), `navttc_hunarmand_pakistan` (skills), `peef_punjab_undergraduate` (scholarship) |
 | Job records loaded | **0** — all `njp_jobs_sample.json` entries are `REPLACE ME` placeholders and are correctly skipped by the loader |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
@@ -110,6 +110,9 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | DATA-03 | "Jobs" category is selectable but always returns nothing | data + `app.py` | **P1** | **DONE** | — |
 | OPS-01 | No error handling around any Gemini call | `llm_client.py` | **P1** | **DONE** | — |
 | OPS-02 | Confirm model name against the live API | `llm_client.py` | **P1** | BLOCKED (needs API key) | — |
+| UX-07 | Document checklist count/bar lagged one interaction behind | `app.py` | **P0** | **DONE** | — |
+| UX-08 | Form fields had no visible boundary until clicked | `styles/` | **P0** | **DONE** | — |
+| UX-09 | No motion system; header was not a distinct layer | `styles/` + `app.py` | **P1** | **DONE** | — |
 | UX-04 | Material icon ligature rendered as raw text top-left | `app.py` | **P0** | **DONE** | — |
 | UX-05 | "Press Enter to apply" hint on every number input | `app.py` | **P0** | **DONE** | — |
 | UX-06 | Interface read as a prototype, not a product | `app.py` + `i18n.py` | **P1** | **DONE** | — |
@@ -389,6 +392,115 @@ Check the current model list in Google AI Studio once a key is available, update
 - [ ] Model name confirmed against the live API. **(needs a key)**
 - [ ] A real text generation succeeds. **(needs a key)**
 - [ ] A real image extraction succeeds. **(needs a key)**
+
+---
+
+#### UX-07 — Document checklist lagged one interaction behind
+**Area:** `app.py` · **Priority:** P0 · **Status:** **DONE** · **Owner:** —
+
+**What was wrong**
+Ticking all seven boxes left the progress bar short; unticking one left it
+full. Reported from the running app and reproduced exactly.
+
+The cause was **render order**, not arithmetic. The caption and progress bar
+were written *before* the loop that reads the checkboxes, so they rendered the
+count as it stood at the start of the run - always one interaction stale.
+
+```python
+st.caption(...)            # drawn using last run's `ready`
+st.progress(len(ready)/n)  #   ""
+for i, doc in enumerate(docs):      # only now is the true state read
+    if st.checkbox(doc, ...): ready.add(i)
+```
+
+**What was done**
+Reserve a `st.container()` above the list, read every checkbox first, then
+write the count and bar into the reserved slot once the real number is known.
+The readiness set is now rebuilt from the widgets each run rather than mutated
+in place, so it cannot drift.
+
+**Acceptance criteria**
+- [x] Count and bar match the boxes on every transition, 0 → 7 and 7 → 0.
+- [x] Ticking the final box completes the bar in the same render.
+- [x] Covered by AppTest regression tests (`tests/test_app_ui.py`).
+
+---
+
+#### UX-08 — Form fields had no visible boundary until clicked
+**Area:** `styles/components.css` · **Priority:** P0 · **Status:** **DONE** · **Owner:** —
+
+Selects and number inputs relied on Streamlit's default near-invisible border,
+so a field only looked interactive once focused. This is a genuine usability
+failure, not a cosmetic one - people could not tell a control was there.
+
+Every control now defines the full state set required by the spec (9.2):
+**Default · Hover · Focus · Filled · Selected · Disabled · Error**. Fields are
+48px tall with a 12px radius, a white surface and a visible 1px border by
+default; hover darkens the border, focus adds the brand ring, and the focus
+indicator is never removed.
+
+Gender moved from a dropdown to a **segmented control** (spec 9.4) - clearly
+separated, tappable options with a soft green selected state. Selecting nothing
+still means "prefer not to say", so the privacy stance is unchanged.
+
+**Acceptance criteria**
+- [x] Every field has a visible boundary before it is touched.
+- [x] Hover, focus and selected states defined for all controls.
+- [x] Gender uses tappable options, verified by test.
+- [x] Values survive reruns, verified by test.
+
+---
+
+#### UX-09 — No motion system; header was not a distinct layer
+**Area:** `styles/`, `app.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
+
+**Stylesheets extracted** to `styles/theme.css`, `components.css` and
+`animations.css` (spec 17.1). `app.py` now generates only the language-
+dependent font variables and the RTL block, so the CSS is readable and
+reviewable instead of buried in a Python f-string.
+
+**Header** is now a real navigation layer: white surface at 92% with a blur, a
+1px bottom border against the warm page, a logo mark, the wordmark with its
+Urdu companion, nav links with an animated underline, a compact `EN | اردو`
+switcher and a contextual primary action.
+
+**Motion**, all CSS-only and all within the spec's duration scale (fast 160ms /
+normal 220ms / reveal 420ms / slow 650ms) on `cubic-bezier(.22,1,.36,1)`:
+- Category cards lift 3px, strengthen their border, gain a soft shadow, shift
+  their icon and grow an accent line from 25% to 100%.
+- The **Sahulat Path** draws once, left to right, then the four nodes pop in on
+  an 80ms stagger. It becomes a vertical timeline under 640px.
+- Results reveal with the count landing first, then cards arriving on an 80ms
+  stagger - information arriving, not cards falling.
+- Buttons lift 1px and compress slightly on press; source links shift their
+  arrow 3px.
+
+**Replay is gated in Python.** Streamlit reruns the whole script on every
+interaction, so an ungated CSS entrance would replay each time a checkbox was
+ticked. `should_animate()` records a token per real state change, and the
+reveal classes are only emitted when that token is new. A test asserts the
+classes appear on first render, vanish on an unrelated rerun, and return for a
+genuinely new result set.
+
+**`prefers-reduced-motion`** collapses every duration to 1ms and disables the
+lifts. Nothing is hidden behind a transition, so the product stays fully usable
+with motion off.
+
+**Not done, deliberately:** the "Finding your matches…" staged processing
+sequence. The spec asks for it (master prompt) but its own rule 10.1 says *only
+show this when a real operation is actually happening — never fake a delay for
+instant local operations*. Rules matching here is local and instant, so a
+staged wait would be theatre. The honest version of that moment — count first,
+then staggered card reveal (10.2/10.3) — is implemented, and the pipeline
+stages remain visible in *How this match was generated*. If an LLM call is ever
+on the results path, add the sequence there.
+
+**Acceptance criteria**
+- [x] Stylesheets in `styles/`, loaded and cached.
+- [x] Header reads as a separate layer.
+- [x] Category hover, path draw, result stagger implemented.
+- [x] Reveals gated so they do not replay on unrelated reruns (tested).
+- [x] `prefers-reduced-motion` honoured.
 
 ---
 
@@ -974,6 +1086,8 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-11 | **UX-09** — no fake "Finding your matches…" delay | The spec asks for the sequence but its own rule 10.1 forbids faking one for instant local work. Rules matching is local and instant; the honest version (count first, then staggered reveal) is implemented instead | Claude |
+| 2026-09-11 | **UX-09** — reveal replay gated in Python, not CSS | Streamlit reruns the script on every interaction, so a CSS-only entrance would replay whenever a checkbox was ticked. A session-state token ties each reveal to a real state change | Claude |
 | 2026-09-11 | **UX-06** — no percentage "profile fit" score | The spec shows one in a mock (17) but warns against implied precision (18). We have no defensible scoring model, and a number would read as an official probability. The per-condition list says more, honestly | Claude |
 | 2026-09-11 | **UX-06** — listing status derived, never asserted | No curated record has a verified deadline, so none shows "Open"; they show "Verify current cycle". Claiming a cycle is open when we do not know would be the most damaging error this product could make | Claude |
 | 2026-09-11 | **UX-06** — sidebar removed entirely | It held only language, status and catalogue counts, and its collapse control was the source of the icon artefact. A brand bar plus the How-it-works tab covers the same ground with less chrome | Claude |
@@ -1009,6 +1123,11 @@ Append one line per completed piece of work.
 | 2026-09-11 | PERF-01..04 | Lazy + `@st.cache_resource` retrieval, offline model loading, opt-in semantic search, `.streamlit/config.toml`. **First render measured at 1.07s** (was ~30-35s), with no heavy modules imported at page load. |
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
+| 2026-09-11 | UX-07 | **Reported bug fixed** — the document checklist count and bar were written before the checkboxes were read, so they lagged one interaction. Deferred into a reserved container; readiness now rebuilt from the widgets each run. |
+| 2026-09-11 | UX-08 | Every form control given a visible default boundary plus hover, focus and selected states; gender moved to a segmented control. |
+| 2026-09-11 | UX-09 | Stylesheets extracted to `styles/`; header became a distinct navigation layer; category hover, Sahulat Path draw and staggered result reveal added, all gated so they do not replay on unrelated reruns; `prefers-reduced-motion` honoured. |
+| 2026-09-11 | *(found & fixed)* | `start_over()` did not clear the animation tokens, so restarting the demo landed on a static page. Caught by a test. |
+| 2026-09-11 | TEST-01 | Suite grown 118 → **130 tests**; new `tests/test_app_ui.py` drives the real widgets through AppTest. |
 | 2026-09-11 | UX-04 | **Regression I introduced** - a broad `[class*="st-"]` font rule also matched Streamlit's Material icon spans, so `keyboard_double_arrow_right` rendered as literal text. Selector dropped and an icon-font guard added. |
 | 2026-09-11 | UX-05 | Hid the "Press Enter to apply" input hint, the Deploy button and the default header chrome. |
 | 2026-09-11 | UX-06 | Civic Intelligence redesign: home page with hero and inline-SVG opportunity map, sidebar removed in favour of a brand bar, warm paper palette with green demoted to an accent, ranked editorial results, visible source provenance, data-driven listing status, document readiness, application timeline, judge-facing pipeline view, sample demo profile, prompt chips, human error states, mobile breakpoints. |
