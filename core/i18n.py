@@ -121,9 +121,9 @@ STRINGS: Dict[str, Dict[str, str]] = {
         "ur": "{n} ریکارڈ کے مقابلے میں جانچا گیا۔ یہ صرف معلوماتی ہے — درخواست سے پہلے "
               "سرکاری ذریعے سے تصدیق ضرور کریں۔",
     },
-    "status_eligible": {"en": "Likely Eligible", "ur": "غالباً اہل"},
+    "status_eligible": {"en": "Likely match", "ur": "غالباً موزوں"},
     "status_needs_verification": {"en": "Needs Verification", "ur": "تصدیق درکار"},
-    "status_not_eligible": {"en": "Likely Not Eligible", "ur": "غالباً اہل نہیں"},
+    "status_not_eligible": {"en": "Does not currently match", "ur": "فی الحال موزوں نہیں"},
     "listing_closed": {"en": "Applications closed", "ur": "درخواستیں بند"},
     "listing_closed_explainer": {
         "en": "The deadline for this listing has passed. This is about the listing, "
@@ -433,6 +433,172 @@ STRINGS: Dict[str, Dict[str, str]] = {
     "pg_orphan": {"en": "orphaned applicants", "ur": "یتیم امیدوار"},
     "pg_minority": {"en": "religious minorities", "ur": "مذہبی اقلیتیں"},
     "pg_under_served_district": {"en": "under-served districts", "ur": "پسماندہ اضلاع"},
+
+
+    # -- navigation / brand -------------------------------------------------
+    "brand_urdu": {"en": "سہولت", "ur": "سہولت"},
+    "nav_discover": {"en": "Discover", "ur": "دریافت کریں"},
+    "nav_read": {"en": "Read an announcement", "ur": "اعلان پڑھیں"},
+    "nav_how": {"en": "How it works", "ur": "یہ کیسے کام کرتا ہے"},
+
+    # -- hero ---------------------------------------------------------------
+    "hero_eyebrow": {"en": "Pakistan's Opportunity Navigator",
+                     "ur": "پاکستان کا مواقع نیویگیٹر"},
+    "hero_title": {"en": "Find opportunities that fit your life.",
+                   "ur": "ایسے مواقع تلاش کریں جو آپ کی زندگی کے مطابق ہوں۔"},
+    "hero_body": {
+        "en": "Scholarships, jobs, training and selected public programmes — matched "
+              "using clear eligibility rules and explained with official sources.",
+        "ur": "اسکالرشپ، نوکریاں، تربیت اور منتخب سرکاری پروگرام — واضح اہلیت کے "
+              "قواعد سے جانچے گئے اور سرکاری ذرائع سے سمجھائے گئے۔",
+    },
+    "cta_start": {"en": "Tell us about yourself", "ur": "اپنے بارے میں بتائیں"},
+    "cta_sample": {"en": "Try a sample profile", "ur": "نمونہ پروفائل آزمائیں"},
+    "trust_rules": {"en": "Rules-based matching", "ur": "قواعد پر مبنی جانچ"},
+    "trust_sources": {"en": "Official-source evidence", "ur": "سرکاری ذرائع کے شواہد"},
+    "trust_no_pii": {"en": "No sensitive identifiers", "ur": "کوئی حساس شناخت نہیں"},
+    "map_you": {"en": "You", "ur": "آپ"},
+
+    # -- what can you find --------------------------------------------------
+    "find_heading": {"en": "What can Sahulat AI help you find?",
+                     "ur": "سہولت اے آئی آپ کو کیا تلاش کرنے میں مدد دے سکتا ہے؟"},
+    "find_scholarship": {"en": "Financial support for students.",
+                         "ur": "طلباء کے لیے مالی معاونت۔"},
+    "find_job": {"en": "Government and public-sector roles.",
+                 "ur": "سرکاری اور عوامی شعبے کی ملازمتیں۔"},
+    "find_skills": {"en": "Skills and professional development.",
+                    "ur": "ہنر اور پیشہ ورانہ تربیت۔"},
+    "find_assistance": {"en": "Public support programmes.",
+                        "ur": "عوامی امدادی پروگرام۔"},
+
+    # -- journey ------------------------------------------------------------
+    "journey_heading": {"en": "From profile to opportunity",
+                        "ur": "پروفائل سے موقع تک"},
+    "journey_line": {"en": "You tell us. Rules check. Sources explain. You decide.",
+                     "ur": "آپ بتائیں۔ قواعد جانچیں۔ ذرائع وضاحت کریں۔ فیصلہ آپ کا۔"},
+    "journey_1_title": {"en": "Tell us about yourself", "ur": "اپنے بارے میں بتائیں"},
+    "journey_1_body": {"en": "Only the attributes needed for matching.",
+                       "ur": "صرف وہ معلومات جو جانچ کے لیے درکار ہیں۔"},
+    "journey_2_title": {"en": "Rules check the criteria", "ur": "قواعد معیار جانچتے ہیں"},
+    "journey_2_body": {"en": "No guessing. Missing information stays unknown.",
+                       "ur": "کوئی اندازہ نہیں۔ غائب معلومات نامعلوم رہتی ہیں۔"},
+    "journey_3_title": {"en": "Sources provide evidence", "ur": "ذرائع شواہد دیتے ہیں"},
+    "journey_3_body": {"en": "We show where important claims come from.",
+                       "ur": "ہم بتاتے ہیں کہ اہم باتیں کہاں سے آئیں۔"},
+    "journey_4_title": {"en": "You get the next step", "ur": "آپ کو اگلا قدم ملتا ہے"},
+    "journey_4_body": {"en": "Documents, status and the official application link.",
+                       "ur": "دستاویزات، صورتحال اور سرکاری درخواست کا لنک۔"},
+
+    # -- principles ---------------------------------------------------------
+    "principles_heading": {"en": "Built around three principles",
+                           "ur": "تین اصولوں پر بنایا گیا"},
+    "principle_1_title": {"en": "Rules decide", "ur": "قواعد فیصلہ کرتے ہیں"},
+    "principle_1_body": {"en": "Eligibility is evaluated against structured criteria, "
+                               "never guessed by a language model.",
+                         "ur": "اہلیت منظم معیار کے مطابق جانچی جاتی ہے، کسی ماڈل کے "
+                               "اندازے سے نہیں۔"},
+    "principle_2_title": {"en": "Sources support", "ur": "ذرائع تائید کرتے ہیں"},
+    "principle_2_body": {"en": "Important claims are linked to the published source "
+                               "they came from.",
+                         "ur": "اہم دعوے اُس شائع شدہ ماخذ سے منسلک ہیں جہاں سے آئے۔"},
+    "principle_3_title": {"en": "AI explains", "ur": "اے آئی وضاحت کرتا ہے"},
+    "principle_3_body": {"en": "The model turns a decided result into understandable "
+                               "guidance — it cannot change the outcome.",
+                         "ur": "ماڈل طے شدہ نتیجے کو قابلِ فہم رہنمائی میں بدلتا ہے — "
+                               "نتیجہ بدل نہیں سکتا۔"},
+
+    # -- privacy ------------------------------------------------------------
+    "privacy_heading": {"en": "Your privacy", "ur": "آپ کی پرائیویسی"},
+    "privacy_body": {
+        "en": "Sahulat AI does not need your CNIC, name, phone number or address to "
+              "suggest opportunities. Nothing you enter is stored after you close the page.",
+        "ur": "سہولت اے آئی کو مواقع تجویز کرنے کے لیے آپ کے شناختی کارڈ، نام، فون نمبر "
+              "یا پتے کی ضرورت نہیں۔ صفحہ بند کرنے کے بعد کچھ محفوظ نہیں رہتا۔",
+    },
+
+    # -- source provenance --------------------------------------------------
+    "source_heading": {"en": "Source", "ur": "ماخذ"},
+    "source_verified": {"en": "Source verified", "ur": "ماخذ تصدیق شدہ"},
+    "source_needs_check": {"en": "Verify current cycle", "ur": "موجودہ سائیکل کی تصدیق کریں"},
+    "source_last_checked": {"en": "Last checked", "ur": "آخری جانچ"},
+    "source_not_checked": {"en": "Not yet checked by our team",
+                           "ur": "ہماری ٹیم نے ابھی جانچ نہیں کی"},
+    "source_verify_body": {
+        "en": "The eligibility information is published, but the current application "
+              "cycle may have changed. Confirm on the official page before applying.",
+        "ur": "اہلیت کی معلومات شائع شدہ ہیں، لیکن موجودہ درخواست سائیکل بدل سکتا ہے۔ "
+              "درخواست سے پہلے سرکاری صفحے پر تصدیق کریں۔",
+    },
+
+    # -- listing status chips -----------------------------------------------
+    "listing_open": {"en": "Open", "ur": "کھلا"},
+    "listing_verify_cycle": {"en": "Verify current cycle", "ur": "سائیکل کی تصدیق کریں"},
+
+    # -- match labels (spec section 19) -------------------------------------
+    "match_likely": {"en": "Likely match", "ur": "غالباً موزوں"},
+    "match_needs_verification": {"en": "Needs verification", "ur": "تصدیق درکار"},
+    "match_none": {"en": "Does not currently match", "ur": "فی الحال موزوں نہیں"},
+
+    # -- results ------------------------------------------------------------
+    "results_found": {"en": "We found {n} opportunities worth checking",
+                      "ur": "ہمیں {n} قابلِ توجہ مواقع ملے"},
+    "results_found_one": {"en": "We found 1 opportunity worth checking",
+                          "ur": "ہمیں 1 قابلِ توجہ موقع ملا"},
+    "results_breakdown": {"en": "{strong} strong · {verify} need verification · {no} not a match",
+                          "ur": "{strong} مضبوط · {verify} تصدیق درکار · {no} غیر موزوں"},
+    "first_card_note": {"en": "This one looks especially relevant to you.",
+                        "ur": "یہ آپ کے لیے خاص طور پر موزوں لگتا ہے۔"},
+    "why_matches_you": {"en": "Why this matches you", "ur": "یہ آپ کے لیے کیوں موزوں ہے"},
+    "view_eligibility": {"en": "View eligibility", "ur": "اہلیت دیکھیں"},
+    "how_generated": {"en": "How this match was generated",
+                      "ur": "یہ نتیجہ کیسے بنا"},
+    "pipeline_profile": {"en": "Your profile", "ur": "آپ کی پروفائل"},
+    "pipeline_rules": {"en": "Eligibility rules", "ur": "اہلیت کے قواعد"},
+    "pipeline_match": {"en": "Structured match", "ur": "منظم جانچ"},
+    "pipeline_retrieval": {"en": "Official-source retrieval", "ur": "سرکاری ماخذ سے حوالہ"},
+    "pipeline_explain": {"en": "AI explanation", "ur": "اے آئی وضاحت"},
+
+    # -- application journey -------------------------------------------------
+    "timeline_heading": {"en": "Application journey", "ur": "درخواست کا سفر"},
+
+    # -- empty / error states -----------------------------------------------
+    "empty_heading": {"en": "We couldn't find a strong match yet.",
+                      "ur": "ابھی کوئی مضبوط مماثلت نہیں ملی۔"},
+    "empty_body": {"en": "Try changing your education level, the categories you chose, "
+                         "or your domicile.",
+                   "ur": "اپنی تعلیمی سطح، منتخب زمرے یا ڈومیسائل تبدیل کر کے دیکھیں۔"},
+    "error_busy": {"en": "Sahulat AI is temporarily busy. Your profile is safe — "
+                         "please try again in a moment.",
+                   "ur": "سہولت اے آئی اس وقت مصروف ہے۔ آپ کی معلومات محفوظ ہیں — "
+                         "براہ کرم کچھ دیر بعد کوشش کریں۔"},
+    "technical_details": {"en": "Technical details", "ur": "تکنیکی تفصیلات"},
+
+    # -- demo profile --------------------------------------------------------
+    "demo_badge": {"en": "Demo profile", "ur": "نمونہ پروفائل"},
+    "demo_note": {"en": "You are viewing a sample profile. Start over to enter your own.",
+                  "ur": "آپ نمونہ پروفائل دیکھ رہے ہیں۔ اپنی معلومات کے لیے دوبارہ شروع کریں۔"},
+
+    # -- prompt chips --------------------------------------------------------
+    "chip_what_apply": {"en": "What can I apply for?", "ur": "میں کس چیز کے لیے درخواست دے سکتا ہوں؟"},
+    "chip_why_qualify": {"en": "Why do I qualify?", "ur": "میں کیوں اہل ہوں؟"},
+    "chip_documents": {"en": "What documents do I need?", "ur": "مجھے کون سی دستاویزات چاہئیں؟"},
+
+    # -- footer --------------------------------------------------------------
+    "footer_tagline": {"en": "Opportunity navigation, made simpler.",
+                       "ur": "مواقع کی تلاش، آسان بنائی گئی۔"},
+    "footer_trust": {"en": "Trust", "ur": "اعتماد"},
+    "footer_language": {"en": "Language", "ur": "زبان"},
+    "footer_built": {"en": "Built for Pakistan", "ur": "پاکستان کے لیے بنایا گیا"},
+    "footer_disclaimer": {
+        "en": "Informational guidance only. Sahulat AI does not make official "
+              "eligibility decisions, verify identity, or submit applications on your behalf.",
+        "ur": "صرف معلوماتی رہنمائی۔ سہولت اے آئی سرکاری اہلیت کا فیصلہ نہیں کرتا، "
+              "شناخت کی تصدیق نہیں کرتا، اور آپ کی طرف سے درخواست جمع نہیں کراتا۔",
+    },
+    "catalogue_stat": {"en": "curated opportunities", "ur": "مرتب شدہ مواقع"},
+    "authorities_stat": {"en": "official authorities", "ur": "سرکاری ادارے"},
+    "sourced_stat": {"en": "source-linked records", "ur": "ماخذ سے منسلک ریکارڈ"},
+    "identifiers_stat": {"en": "sensitive identifiers required", "ur": "حساس شناختیں درکار"},
 
     # -- export -------------------------------------------------------------
     "export_heading": {"en": "Save your results", "ur": "اپنے نتائج محفوظ کریں"},

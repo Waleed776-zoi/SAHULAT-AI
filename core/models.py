@@ -79,6 +79,11 @@ PROVINCES = (
     "Islamabad Capital Territory", "Erstwhile FATA",
 )
 
+# Listing status is derived from data, never typed into a component (spec 94).
+LISTING_OPEN = "open"            # a real future deadline is on record
+LISTING_CLOSED = "closed"        # a real deadline that has passed
+LISTING_VERIFY = "verify_cycle"  # no deadline on record - do not claim it is open
+
 # Groups a programme may give priority to. Data-driven: a record must state
 # these explicitly in `priority_groups` - they are never inferred from prose.
 PRIORITY_GROUPS = ("female", "disability", "orphan", "minority", "under_served_district")
@@ -354,9 +359,47 @@ class MatchResult:
     def count(self, status: str) -> int:
         return sum(1 for c in self.applicable_checks() if c.status == status)
 
+    def listing_state(self) -> str:
+        """
+        Open / closed / unknown, derived from the record.
+
+        Never claims a listing is "Open" unless a real future deadline is on
+        record - most curated entries legitimately have none, and pretending
+        otherwise is exactly the false precision this product avoids.
+        """
+        if self.listing_closed:
+            return LISTING_CLOSED
+        if self.deadline and parse_iso_date(self.deadline):
+            return LISTING_OPEN
+        return LISTING_VERIFY
+
     def confidence_ratio(self) -> float:
         """Share of applicable conditions that are confirmed met (0.0-1.0)."""
         applicable = self.applicable_checks()
         if not applicable:
             return 1.0
         return self.count(MET) / len(applicable)
+
+
+def sample_profile() -> UserProfile:
+    """
+    A realistic demo profile, so a live demo never stalls on data entry
+    (spec section 59). Clearly labelled as demo wherever it is used.
+    """
+    return UserProfile(
+        age=21,
+        gender="female",
+        domicile_province="Balochistan",
+        education_level="intermediate",
+        marks_percentage=72.0,
+        field_of_study="computer_science",
+        currently_enrolled=True,
+        monthly_household_income=35000.0,
+        has_existing_scholarship=False,
+        english_level="intermediate",
+        computer_skills="basic",
+        employment_status="unemployed",
+        years_experience=0.0,
+        has_disability=False,
+        is_orphan=False,
+    )

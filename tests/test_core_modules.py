@@ -374,5 +374,73 @@ class TestRagKeywordFallback(unittest.TestCase):
         self.assertLessEqual(len(self.index.retrieve("scholarship", top_k=1)), 1)
 
 
+class TestListingState(unittest.TestCase):
+    """Spec 55: never claim a listing is Open unless a real deadline says so."""
+
+    def setUp(self):
+        from core.rules_engine import evaluate
+        from core.models import EligibilityConditions
+        self.evaluate = evaluate
+        self.EC = EligibilityConditions
+
+    def _match(self, deadline, today):
+        opp = make_record()
+        opp.eligibility_conditions = self.EC(application_deadline=deadline)
+        return self.evaluate(UserProfile(), opp, today=today)
+
+    def test_no_deadline_is_verify_not_open(self):
+        from datetime import date
+        from core.models import LISTING_VERIFY
+        self.assertEqual(self._match(None, date(2026, 6, 1)).listing_state(),
+                         LISTING_VERIFY)
+
+    def test_future_deadline_is_open(self):
+        from datetime import date
+        from core.models import LISTING_OPEN
+        self.assertEqual(self._match("2026-12-31", date(2026, 6, 1)).listing_state(),
+                         LISTING_OPEN)
+
+    def test_past_deadline_is_closed(self):
+        from datetime import date
+        from core.models import LISTING_CLOSED
+        self.assertEqual(self._match("2020-01-01", date(2026, 6, 1)).listing_state(),
+                         LISTING_CLOSED)
+
+    def test_unparseable_deadline_is_verify_not_open(self):
+        from datetime import date
+        from core.models import LISTING_VERIFY
+        self.assertEqual(self._match("REPLACE ME", date(2026, 6, 1)).listing_state(),
+                         LISTING_VERIFY)
+
+    def test_curated_records_never_claim_open(self):
+        from core.models import LISTING_OPEN
+        from core.rules_engine import evaluate_all
+        for result in evaluate_all(UserProfile(), load_all_opportunities()):
+            self.assertNotEqual(result.listing_state(), LISTING_OPEN,
+                                "no curated record has a verified deadline yet")
+
+
+class TestSampleProfile(unittest.TestCase):
+    """Spec 59: the demo path must never stall or leak into real use."""
+
+    def test_sample_is_complete_and_screenable(self):
+        from core.models import sample_profile
+        profile = sample_profile()
+        self.assertTrue(profile.is_screenable())
+        self.assertEqual(profile.known_field_count(), profile.total_field_count())
+
+    def test_sample_carries_no_identifiers(self):
+        from core.models import sample_profile
+        for forbidden in ("name", "cnic", "phone", "address"):
+            self.assertFalse(hasattr(sample_profile(), forbidden))
+
+    def test_sample_produces_at_least_one_strong_match(self):
+        from core.models import sample_profile
+        from core.rules_engine import evaluate_all
+        results = evaluate_all(sample_profile(), load_all_opportunities())
+        self.assertTrue(any(r.overall_status == STATUS_ELIGIBLE for r in results),
+                        "demo profile must not show an empty result page")
+
+
 if __name__ == "__main__":
     unittest.main()

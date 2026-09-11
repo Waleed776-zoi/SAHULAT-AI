@@ -4,7 +4,7 @@
 Companion to `README.md` (which is the *setup* guide). This file is the *work* guide.
 
 - **Created:** 2026-09-10
-- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: guided wizard, design system, richer screening fields. 31 items closed, 110 tests passing
+- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Civic Intelligence redesign, guided wizard, richer screening fields. 34 items closed, 118 tests passing
 - **Baseline audited:** full read of all 10 source files, 5 data files, config, and a live environment verification run.
 
 ---
@@ -54,7 +54,7 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **110/110 pass** — `Ran 110 tests in 0.053s / OK` |
+| Unit tests | **118/118 pass** — `Ran 118 tests in 0.051s / OK` |
 | Data loader | Loads **3** opportunities: `hec_balochistan_fata_ug` (scholarship), `navttc_hunarmand_pakistan` (skills), `peef_punjab_undergraduate` (scholarship) |
 | Job records loaded | **0** — all `njp_jobs_sample.json` entries are `REPLACE ME` placeholders and are correctly skipped by the loader |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
@@ -110,6 +110,9 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | DATA-03 | "Jobs" category is selectable but always returns nothing | data + `app.py` | **P1** | **DONE** | — |
 | OPS-01 | No error handling around any Gemini call | `llm_client.py` | **P1** | **DONE** | — |
 | OPS-02 | Confirm model name against the live API | `llm_client.py` | **P1** | BLOCKED (needs API key) | — |
+| UX-04 | Material icon ligature rendered as raw text top-left | `app.py` | **P0** | **DONE** | — |
+| UX-05 | "Press Enter to apply" hint on every number input | `app.py` | **P0** | **DONE** | — |
+| UX-06 | Interface read as a prototype, not a product | `app.py` + `i18n.py` | **P1** | **DONE** | — |
 | UX-01 | Enter key submitted a half-filled form straight to results | `app.py` | **P0** | **DONE** | — |
 | UX-02 | Decorative emoji throughout made the UI look unserious | `app.py` + `i18n.py` | **P1** | **DONE** | — |
 | UX-03 | No design system: abstract layout, default typography | `app.py` | **P1** | **DONE** | — |
@@ -386,6 +389,115 @@ Check the current model list in Google AI Studio once a key is available, update
 - [ ] Model name confirmed against the live API. **(needs a key)**
 - [ ] A real text generation succeeds. **(needs a key)**
 - [ ] A real image extraction succeeds. **(needs a key)**
+
+---
+
+#### UX-04 — Material icon ligature rendered as raw text
+**Area:** `app.py` · **Priority:** P0 · **Status:** **DONE** · **Owner:** —
+
+**What was wrong**
+`keyboard_double_arrow_right` appeared as literal text in the top-left corner.
+
+This was **my own regression** from the previous round. The stylesheet set
+`font-family` on `[class*="st-"]`, and that selector also matches Streamlit's
+Material icon spans. An icon font renders its glyph *from the ligature text*, so
+overriding the font leaves the ligature name showing as plain words.
+
+**What was done**
+- Dropped the broad attribute selector. Base type is now set on
+  `html, body, .stApp` and inherited, plus explicit widget selectors.
+- Added an explicit guard so an icon font can never be overridden again.
+- Removed the sidebar entirely, so the collapse control that displayed the
+  artefact no longer exists.
+
+**Acceptance criteria**
+- [x] No raw ligature text anywhere.
+- [x] No broad attribute selector that can catch an icon font.
+- [x] Icon-font guard present in the rendered stylesheet (verified).
+
+---
+
+#### UX-05 — "Press Enter to apply" hint on every number input
+**Area:** `app.py` · **Priority:** P0 · **Status:** **DONE** · **Owner:** —
+
+Streamlit renders an `InputInstructions` hint inside number and text inputs. It
+is visual noise, and worse, it advertised the very Enter-key behaviour that
+UX-01 removed - so it was actively misleading.
+
+Hidden with `div[data-testid="InputInstructions"] { display: none !important; }`.
+The same pass hides the Deploy button, the status widget and the default header,
+which were the other tells that this is a Streamlit app.
+
+**Acceptance criteria**
+- [x] Hint no longer rendered.
+- [x] Deploy button and default header chrome hidden.
+
+---
+
+#### UX-06 — Interface read as a prototype rather than a product
+**Area:** `app.py`, `core/i18n.py`, `core/models.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
+
+Implements the *Civic Intelligence* direction from the premium UI/UX redesign
+specification supplied by the product owner on 2026-09-11 - everything in that
+document's **P0** list and most of **P1**.
+
+> **Note:** the spec document itself is **not in this repository**. Section
+> references below (spec 7, spec 17, ...) point at it. Commit it to `docs/` so
+> these references resolve for anyone reading this later.
+
+**Structure**
+- A real **home page** before the wizard: asymmetric hero, inline trust row,
+  "what can you find", the four-step journey, three principles, a privacy
+  block, product-generated statistics and a proper footer.
+- The **sidebar is gone** (spec 12/31/99). A brand bar carries the wordmark
+  `Sahulat AI · سہولت` and a compact `English | اردو` toggle. AI status and
+  catalogue health moved into *How it works*.
+- Tabs renamed: Discover / Read an announcement / How it works.
+
+**Visual system** (spec 7, 8, 35-38, 91)
+- Warm paper background `#F8F8F4` with white content surfaces. Green is demoted
+  to an accent, with gold for verification and blue for information.
+- Full token set: colour, radius (8/14/20/24), the barely-there shadow, and an
+  8px spacing scale. Reading width capped; container max-width 1200px.
+
+**Signature visual** (spec 11)
+- An inline-SVG **opportunity map** - one person, four paths. No external asset,
+  no animation, inherits the palette.
+
+**Results** (spec 17, 20, 21, 23, 25, 26, 54, 55, 61)
+- A ranked **editorial list** with `01`/`02` numbering rather than a card grid.
+  The top match is called out: *"This one looks especially relevant to you."*
+- **Source provenance** is a visible block - authority, source title,
+  verification state, last-checked date - not a footnote.
+- **Listing status is derived from data** (`MatchResult.listing_state()`).
+  Because no curated record has a verified deadline, none claims to be "Open";
+  they show *Verify current cycle*, which is the honest answer.
+- **Document readiness** with a progress bar, and an **application journey**
+  timeline.
+- A judge-facing **"How this match was generated"** pipeline view. It is a
+  static, honest description - no artificial delay pretending to be computation.
+
+**Demo path** (spec 59, 60)
+- *Try a sample profile* fills a realistic Balochistan profile and jumps
+  straight to results, so a live demo cannot stall on data entry. It is clearly
+  marked `Demo profile` and cleared by *Start over*.
+
+**Also**: prompt chips for the follow-up chat, human error copy with a
+*Technical details* disclosure, honest empty states, mobile breakpoints, and a
+`prefers-reduced-motion` block.
+
+**Deliberately not done** - in the spec but rejected as scope or honesty risks:
+percentage "profile fit" scores, Roman Urdu parsing, opportunity comparison,
+saved opportunities, notifications, and a custom logo mark (that needs a
+designer, not a code change).
+
+**Acceptance criteria**
+- [x] No sidebar; brand bar with compact language toggle.
+- [x] Home page with hero, SVG map, journey, principles, privacy, footer.
+- [x] Ranked editorial results with provenance, readiness and timeline.
+- [x] Listing status derived from data; never claims Open without a deadline.
+- [x] Demo profile reaches results with at least one strong match (tested).
+- [x] Mobile breakpoints and reduced-motion support.
 
 ---
 
@@ -862,6 +974,9 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-11 | **UX-06** — no percentage "profile fit" score | The spec shows one in a mock (17) but warns against implied precision (18). We have no defensible scoring model, and a number would read as an official probability. The per-condition list says more, honestly | Claude |
+| 2026-09-11 | **UX-06** — listing status derived, never asserted | No curated record has a verified deadline, so none shows "Open"; they show "Verify current cycle". Claiming a cycle is open when we do not know would be the most damaging error this product could make | Claude |
+| 2026-09-11 | **UX-06** — sidebar removed entirely | It held only language, status and catalogue counts, and its collapse control was the source of the icon artefact. A brand bar plus the How-it-works tab covers the same ground with less chrome | Claude |
 | 2026-09-11 | **UX-01** — a step wizard with no `st.form` anywhere | A form submits on Enter, which was the reported bug. Explicit Back/Continue buttons make progression deliberate, and validation lives in a testable module rather than the UI | Claude |
 | 2026-09-11 | **UX-01** — only age, domicile and education are required | These three change almost every result, so leaving them blank makes the whole screen read "needs verification". Income and the sensitive fields stay optional, preserving the "never guess, never pressure" stance | Claude |
 | 2026-09-11 | **FEAT-06** — priority groups are advantages, never gates | A reserved place helps those inside the group; it must never exclude those outside it. Encoded as data transcribed from each record's own note, never inferred from prose | Claude |
@@ -894,6 +1009,10 @@ Append one line per completed piece of work.
 | 2026-09-11 | PERF-01..04 | Lazy + `@st.cache_resource` retrieval, offline model loading, opt-in semantic search, `.streamlit/config.toml`. **First render measured at 1.07s** (was ~30-35s), with no heavy modules imported at page load. |
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
+| 2026-09-11 | UX-04 | **Regression I introduced** - a broad `[class*="st-"]` font rule also matched Streamlit's Material icon spans, so `keyboard_double_arrow_right` rendered as literal text. Selector dropped and an icon-font guard added. |
+| 2026-09-11 | UX-05 | Hid the "Press Enter to apply" input hint, the Deploy button and the default header chrome. |
+| 2026-09-11 | UX-06 | Civic Intelligence redesign: home page with hero and inline-SVG opportunity map, sidebar removed in favour of a brand bar, warm paper palette with green demoted to an accent, ranked editorial results, visible source provenance, data-driven listing status, document readiness, application timeline, judge-facing pipeline view, sample demo profile, prompt chips, human error states, mobile breakpoints. |
+| 2026-09-11 | TEST-01 | Suite grown 110 → **118 tests** (listing status, sample profile). |
 | 2026-09-11 | UX-01 | Single `st.form` replaced by a validated four-step wizard; Enter can no longer submit a half-filled profile. Step rules extracted to `core/validation.py`. |
 | 2026-09-11 | UX-02 | All decorative emoji removed; only the `✓` / `✕` condition dingbats remain. |
 | 2026-09-11 | UX-03 | Design system added: Source Serif 4 + Inter (Nastaliq + Naskh for Urdu), one colour-token palette, and a component set (masthead, stepper, panel, badge, callout, KPI, answer summary). |
@@ -912,4 +1031,5 @@ Things that need a human answer before the work they block can proceed.
 - [ ] **Is a Gemini API key available yet?** `OPS-02` and the real-image testing of README Step 10 are blocked until one exists.
 - [ ] **What is the actual demo date/time?** Every "before the demo" item needs a real deadline to be sequenced against.
 - [ ] **Does the Upload tab need its own profile form** (BUG-01), or should it reuse the profile from the Catalog tab? The second is simpler and probably better UX.
+- [ ] **Commit the UI/UX redesign spec to `docs/`** — UX-06 cites its section numbers, but the document lives outside the repo, so those citations currently resolve to nothing.
 - [ ] **Is `assistance` (public assistance schemes) in scope at all?** It is a category in `schema.json` and a "Coming Soon" label in `i18n.py`, but has zero records and no plan attached.
