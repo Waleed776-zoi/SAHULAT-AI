@@ -9,6 +9,7 @@ tests over `core/` therefore cannot catch.
 import os
 import re
 import unittest
+from unittest import mock
 
 from streamlit.testing.v1 import AppTest
 
@@ -163,6 +164,158 @@ class TestFieldsAndState(unittest.TestCase):
         """UX-05: 'Press Enter to apply' advertised behaviour we removed."""
         css = " ".join(str(m.value) for m in launch().markdown)
         self.assertIn("InputInstructions", css)
+
+
+UPLOAD_FIXTURE = {
+    "name": "Overseas Scholarship for MS/M.Phil leading to Ph.D. (Phase III)",
+    "category": "scholarship",
+    "provider": "Higher Education Commission (HEC) Pakistan",
+    "summary_en": "Overseas scholarships at Top 200 ranked universities.",
+    "eligibility_conditions": {
+        "max_age": 40,
+        "min_education_level": "bachelor",
+        "min_marks_percentage": 60,
+        "must_not_have_existing_scholarship": True,
+        "special_quota_note": "Preference for under-represented districts.",
+        "application_deadline": "2026-11-30",
+    },
+    "required_documents": ["CNIC", "Degree transcripts"],
+    "application_steps": ["Register on the portal", "Submit before the deadline"],
+    "official_url_if_visible": "https://hec.gov.pk/",
+    "extraction_confidence": "high",
+}
+
+
+def bare_app():
+    """
+    Import app.py as a module to reach its pure helpers.
+
+    Streamlit calls become no-ops without a runtime, which is exactly what we
+    want: these tests are about the markup and the call order, not rendering.
+    """
+    import warnings
+    warnings.filterwarnings("ignore")
+    import app
+    return app
+
+
+class TestStagePanel(unittest.TestCase):
+    """
+    UX-10: the staged panel must describe work that has actually happened.
+    """
+
+    LABELS = ["Preparing", "Reading", "Structuring", "Screening"]
+
+    def states(self, html):
+        return re.findall(r'<div class="sa-stage (is-[a-z]+)"', html)
+
+    def test_exactly_one_stage_is_active(self):
+        app = bare_app()
+        for active in range(len(self.LABELS)):
+            states = self.states(app.stage_markup(self.LABELS, active))
+            self.assertEqual(states.count("is-active"), 1, f"active={active}")
+
+    def test_earlier_stages_are_done_and_later_are_pending(self):
+        app = bare_app()
+        states = self.states(app.stage_markup(self.LABELS, 2))
+        self.assertEqual(states, ["is-done", "is-done", "is-active", "is-pending"])
+
+    def test_only_the_running_stage_shows_an_indicator(self):
+        """A finished or unstarted step must not appear to still be working."""
+        app = bare_app()
+        html = app.stage_markup(self.LABELS, 1)
+        self.assertEqual(html.count("sa-stage-track"), 1)
+
+    def test_every_stage_is_visible_from_the_start(self):
+        """
+        Fast steps are never padded to look slow, so they stay readable only
+        because the whole list is on screen throughout.
+        """
+        app = bare_app()
+        html = app.stage_markup(self.LABELS, 0)
+        for label in self.LABELS:
+            self.assertIn(label, html)
+
+    def test_no_percentage_is_ever_claimed(self):
+        app = bare_app()
+        html = app.stage_markup(self.LABELS, 1)
+        self.assertNotIn("%", html)
+
+
+class TestStagesAdvanceOnRealBoundaries(unittest.TestCase):
+    """
+    The panel must move because work finished, not because time passed.
+    """
+
+    def test_stage_order_brackets_the_real_calls(self):
+        app = bare_app()
+        log = []
+
+        def fake_stage_markup(labels, active, note=""):
+            log.append(("show", active))
+            return ""
+
+        def fake_extract(file_bytes, mime_type, language="en"):
+            log.append(("model_call", None))
+            return dict(UPLOAD_FIXTURE)
+
+        with mock.patch.object(app, "stage_markup", fake_stage_markup), \
+                mock.patch.object(app, "extract_raw", fake_extract):
+            opportunity, raw, _ = app.read_ad_in_stages(b"x" * 2048, "image/png", False)
+
+        self.assertEqual(log, [("show", 0), ("show", 1), ("model_call", None), ("show", 2)],
+                         "the reading stage must be shown BEFORE the model call and the "
+                         "structuring stage only AFTER it returns")
+        self.assertEqual(opportunity.source_type, "user_uploaded")
+
+    def test_screening_stage_only_when_it_actually_runs(self):
+        app = bare_app()
+        shown = []
+
+        with mock.patch.object(app, "stage_markup",
+                               lambda labels, active, note="": shown.append(len(labels)) or ""), \
+                mock.patch.object(app, "extract_raw", lambda *a, **k: dict(UPLOAD_FIXTURE)):
+            app.read_ad_in_stages(b"x", "image/png", False)
+        self.assertEqual(set(shown), {3}, "no screening stage without answers to screen")
+
+
+class TestExtractionIsReadable(unittest.TestCase):
+    """
+    UX-10: the raw JSON dump was the first thing a user met. It is now one
+    click away, and the conditions are rendered as prose.
+    """
+
+    def setUp(self):
+        from core.ad_reader import build_record
+        opportunity, raw = build_record(dict(UPLOAD_FIXTURE))
+        self.app = AppTest.from_file(APP, default_timeout=180)
+        self.app.session_state["uploaded_opportunity"] = opportunity
+        self.app.session_state["uploaded_raw"] = raw
+        self.app.run()
+        self.body = " ".join(str(m.value) for m in self.app.markdown)
+
+    def test_page_renders(self):
+        self.assertFalse(self.app.exception)
+
+    def test_conditions_are_rendered_as_prose(self):
+        rows = re.findall(r'sa-answer-label">([^<]+)</span>'
+                          r'<span class="sa-answer-value">([^<]+)', self.body)
+        rendered = {label: value for label, value in rows}
+        self.assertIn("Age", rendered)
+        self.assertEqual(rendered["Age"], "at most 40")
+        self.assertEqual(rendered["Academic marks"], "at least 60%")
+
+    def test_unstated_conditions_are_shown_with_the_caveat(self):
+        """
+        Silence in a document is not a qualification. The UI has to say so.
+        """
+        self.assertIn("sa-unstated", self.body)
+        captions = " ".join(str(c.value) for c in self.app.caption)
+        self.assertIn("not the same as qualifying", captions)
+
+    def test_raw_json_is_behind_a_disclosure(self):
+        labels = [e.label for e in self.app.expander]
+        self.assertIn("Show exactly what the model returned", labels)
 
 
 if __name__ == "__main__":

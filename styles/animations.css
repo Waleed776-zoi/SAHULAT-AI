@@ -23,6 +23,15 @@
   to   { opacity: 1; transform: scale(1); }
 }
 
+@keyframes sahulatStageSlide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(360%); }
+}
+@keyframes sahulatStageRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(23, 107, 85, .22); }
+  50%      { box-shadow: 0 0 0 5px rgba(23, 107, 85, 0); }
+}
+
 /* Block-level entrance — animate whole blocks, never every small element */
 .sahulat-reveal {
   animation: sahulatReveal var(--motion-reveal) var(--ease) both;
@@ -65,4 +74,14 @@
   }
   .stButton > button:hover,
   .sahulat-category:hover { transform: none; }
+
+  /* The blanket 1ms rule above would make a looping indicator strobe, and a
+     38%-wide bar frozen mid-track would read as "38% complete", which is a
+     number we do not have. Under reduced motion the stage indicator becomes a
+     still, full-width bar: present, honest, motionless. */
+  .sa-stage-track > span {
+    animation: none !important; width: 100%; opacity: .55;
+  }
+  .sa-stage.is-active .sa-stage-dot { animation: none !important; }
+  .sa-stage.is-pending { filter: none; opacity: .55; }
 }

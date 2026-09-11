@@ -211,7 +211,37 @@ STRINGS: Dict[str, Dict[str, str]] = {
               "and we'll screen this ad against it.",
         "ur": "پہلے \"مواقع تلاش کریں\" ٹیب میں اپنی معلومات بھریں — پھر واپس آئیں۔",
     },
-    "raw_extraction_toggle": {"en": "Show raw extracted data", "ur": "خام ڈیٹا دکھائیں"},
+    "raw_extraction_toggle": {"en": "Show exactly what the model returned",
+                              "ur": "ماڈل نے بالکل کیا لوٹایا، وہ دیکھیں"},
+    "raw_extraction_note": {
+        "en": "The unedited JSON, kept so you can audit any field above against the original document.",
+        "ur": "غیر ترمیم شدہ JSON، تاکہ آپ اوپر دی گئی ہر تفصیل کو اصل دستاویز سے جانچ سکیں۔"},
+
+    # --- staged reading (UX-10) ---
+    "stage_prepare": {"en": "Preparing your file", "ur": "آپ کی فائل تیار کی جا رہی ہے"},
+    "stage_read": {"en": "Reading the document with AI", "ur": "دستاویز کو AI سے پڑھا جا رہا ہے"},
+    "stage_structure": {"en": "Structuring what it says", "ur": "معلومات کو ترتیب دیا جا رہا ہے"},
+    "stage_screen": {"en": "Checking it against your answers",
+                     "ur": "آپ کے جوابات سے جانچا جا رہا ہے"},
+    "stage_running_note": {
+        "en": "Reading happens on Google's servers and takes a few seconds. Your file is not stored.",
+        "ur": "پڑھنے کا عمل گوگل کے سرورز پر ہوتا ہے اور چند سیکنڈ لیتا ہے۔ آپ کی فائل محفوظ نہیں کی جاتی۔"},
+
+    # --- presenting the extraction (UX-10) ---
+    "extracted_requirements": {"en": "Conditions stated in this document",
+                               "ur": "اس دستاویز میں بیان کردہ شرائط"},
+    "extracted_nothing": {
+        "en": "This document did not state any eligibility condition we could read.",
+        "ur": "اس دستاویز میں کوئی ایسی شرط نہیں ملی جو ہم پڑھ سکتے۔"},
+    "extracted_not_stated": {"en": "Not stated in this document", "ur": "اس دستاویز میں درج نہیں"},
+    "extracted_not_stated_note": {
+        "en": "Nothing was found about these, so they are not checked against you. That is not the same as qualifying.",
+        "ur": "ان کے بارے میں کچھ نہیں ملا، اس لیے یہ آپ پر لاگو نہیں کی جاتیں۔ اس کا مطلب اہلیت نہیں۔"},
+    "extracted_documents": {"en": "Documents it asks for", "ur": "مطلوبہ دستاویزات"},
+    "extracted_steps": {"en": "How to apply, as stated", "ur": "درخواست کا طریقہ، جیسا درج ہے"},
+    "extracted_deadline": {"en": "Deadline stated", "ur": "آخری تاریخ درج ہے"},
+    "extracted_quota": {"en": "Preference noted", "ur": "ترجیح درج ہے"},
+    "extracted_category": {"en": "Read as", "ur": "کس قسم کے طور پر پڑھا گیا"},
 
     # -- follow-up chat -----------------------------------------------------
     "ask_followup": {"en": "Ask a follow-up question", "ur": "مزید سوال پوچھیں"},
@@ -958,6 +988,53 @@ def describe_check(check: ConditionCheck, lang: str = "en") -> Tuple[str, str]:
 
     return title, f"{_w(_REQUIRED_WORD, lang)}: {required} · " \
                   f"{_w(_YOU_WORD, lang)}: {_actual_text(check, lang)}"
+
+
+def describe_requirements(conditions, lang: str = "en"):
+    """
+    Render an opportunity's own conditions, with no profile involved (UX-10).
+
+    Returns (stated, unstated):
+      stated   - list of (title, requirement) pairs, in reading order
+      unstated - list of titles the document said nothing about
+
+    Reuses the same titles and phrasing as describe_check(), so a condition
+    reads identically whether it is being explained or evaluated. Building a
+    ConditionCheck to do that is deliberate: there is exactly one place that
+    turns a machine key plus a structured value into prose.
+
+    An unstated condition is NOT a satisfied condition. The caller must say so
+    - see "extracted_not_stated_note".
+    """
+    age_required = None
+    if conditions.min_age is not None or conditions.max_age is not None:
+        age_required = {"min": conditions.min_age, "max": conditions.max_age}
+
+    fields = [
+        (CHECK_AGE, age_required),
+        (CHECK_DOMICILE, conditions.domicile_provinces or None),
+        (CHECK_EDUCATION, conditions.min_education_level),
+        (CHECK_MARKS, conditions.min_marks_percentage),
+        (CHECK_INCOME, conditions.max_monthly_household_income),
+        (CHECK_ENROLLMENT, conditions.must_be_currently_enrolled),
+        (CHECK_EXISTING_SCHOLARSHIP, conditions.must_not_have_existing_scholarship),
+        (CHECK_EMPLOYMENT, conditions.employment_status_required),
+        (CHECK_EXPERIENCE, conditions.min_experience_years),
+        (CHECK_GENDER, getattr(conditions, "gender_required", None)),
+        (CHECK_ENGLISH, getattr(conditions, "min_english_level", None)),
+        (CHECK_COMPUTER, getattr(conditions, "min_computer_skills", None)),
+        (CHECK_FIELD_OF_STUDY, getattr(conditions, "fields_of_study", None) or None),
+    ]
+
+    stated, unstated = [], []
+    for key, required in fields:
+        check = ConditionCheck(key=key, status=UNKNOWN, required=required)
+        title = check_title(check, lang)
+        if required is None:
+            unstated.append(title)
+        else:
+            stated.append((title, _requirement_text(check, lang)))
+    return stated, unstated
 
 
 def describe_profile(profile, lang: str = "en") -> str:

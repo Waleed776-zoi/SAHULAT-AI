@@ -44,16 +44,23 @@ def _clean_str_list(value: Any) -> list:
     return [str(v).strip() for v in value if str(v).strip()]
 
 
-def read_ad(file_bytes: bytes, mime_type: str,
-            language: str = "en") -> Tuple[Opportunity, Dict[str, Any]]:
+def extract_raw(file_bytes: bytes, mime_type: str,
+                language: str = "en") -> Dict[str, Any]:
     """
-    Returns (Opportunity, raw_extracted_dict).
+    Stage 1 of 2: ask the model what the document says. Returns the raw dict.
 
-    The raw dict is returned too so the UI can show the user exactly what was
-    read BEFORE any eligibility judgment is made - the extraction and the
-    verdict must stay visibly separate.
+    Split out from read_ad (UX-10) so the UI can show the model call - the
+    only genuinely slow step, several seconds - as its own stage, and advance
+    the progress display on a real boundary rather than a timer.
     """
-    extracted = extract_opportunity_from_file(file_bytes, mime_type, language=language)
+    return extract_opportunity_from_file(file_bytes, mime_type, language=language)
+
+
+def build_record(extracted: Dict[str, Any]) -> Tuple[Opportunity, Dict[str, Any]]:
+    """
+    Stage 2 of 2: turn the raw extraction into an Opportunity the rules engine
+    can screen. Pure and local - no network, no model.
+    """
     ec_raw = extracted.get("eligibility_conditions") or {}
     if not isinstance(ec_raw, dict):
         ec_raw = {}
@@ -95,3 +102,15 @@ def read_ad(file_bytes: bytes, mime_type: str,
     )
 
     return opportunity, extracted
+
+
+def read_ad(file_bytes: bytes, mime_type: str,
+            language: str = "en") -> Tuple[Opportunity, Dict[str, Any]]:
+    """
+    Returns (Opportunity, raw_extracted_dict).
+
+    The raw dict is returned too so the UI can show the user exactly what was
+    read BEFORE any eligibility judgment is made - the extraction and the
+    verdict must stay visibly separate.
+    """
+    return build_record(extract_raw(file_bytes, mime_type, language=language))

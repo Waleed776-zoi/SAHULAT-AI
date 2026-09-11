@@ -316,6 +316,84 @@
 .sa-answer-label { color: var(--muted); }
 .sa-answer-value { color: var(--ink); font-weight: 600; text-align: end; }
 
+/* ---------- Staged processing (UX-10) ----------
+   Shown ONLY while real work is running. Every stage maps to an actual step:
+   a stage lights up when that step starts and is ticked when it returns. No
+   timers, no padded delays - the AI read genuinely takes several seconds and
+   that is what the panel is showing.
+
+   All four stages stay on screen throughout, dimmed and slightly blurred
+   until their turn. That is what makes the fast stages legible without
+   inventing time for them: the reader sees a list filling in, not labels
+   flashing past.
+   ---------------------------------------------------------------------- */
+.sa-stages {
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); box-shadow: var(--shadow-soft);
+  padding: var(--s5); margin: var(--s4) 0;
+}
+.sa-stage {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s2) 0;
+  transition: opacity var(--motion-normal) var(--ease),
+              filter var(--motion-normal) var(--ease);
+}
+.sa-stage.is-pending { opacity: .38; filter: blur(.8px); }
+.sa-stage.is-active  { opacity: 1;   filter: none; }
+.sa-stage.is-done    { opacity: .78; filter: none; }
+
+.sa-stage-dot {
+  flex: 0 0 auto; width: 1.3rem; height: 1.3rem; border-radius: 50%;
+  border: 1.5px solid var(--border-hover); background: var(--surface);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .66rem; font-weight: 700; color: var(--muted); margin-top: .1rem;
+  transition: border-color var(--motion-normal) var(--ease),
+              background var(--motion-normal) var(--ease),
+              color var(--motion-normal) var(--ease);
+}
+.sa-stage.is-done .sa-stage-dot {
+  background: var(--primary-soft); border-color: var(--primary); color: var(--primary);
+}
+.sa-stage.is-active .sa-stage-dot {
+  border-color: var(--primary); color: var(--primary);
+  animation: sahulatStageRing 1.5s var(--ease) infinite;
+}
+.sa-stage-body { flex: 1 1 auto; min-width: 0; }
+.sa-stage-label { font-size: .88rem; font-weight: 600; color: var(--ink); }
+.sa-stage.is-pending .sa-stage-label { font-weight: 500; color: var(--ink-soft); }
+
+/* Indeterminate: it says "working", never a fabricated percentage. */
+.sa-stage-track {
+  height: 2px; margin-top: var(--s2); border-radius: 2px;
+  background: var(--border-soft); overflow: hidden;
+}
+.sa-stage-track > span {
+  display: block; height: 100%; width: 38%; border-radius: 2px;
+  background: var(--primary);
+  animation: sahulatStageSlide 1.25s var(--ease) infinite;
+}
+.sa-stage-note { font-size: .78rem; color: var(--muted); margin-top: var(--s3); }
+
+/* ---------- Extracted document summary (UX-10) ---------- */
+.sa-extract-title {
+  font-family: var(--sa-font-display); font-size: 1.22rem; font-weight: 700;
+  color: var(--ink); line-height: 1.3; margin: var(--s3) 0 var(--s2);
+}
+.sa-extract-lede { font-size: .93rem; color: var(--ink-soft); line-height: 1.6; }
+.sa-extract-meta {
+  font-size: .8rem; color: var(--muted); margin-top: var(--s2);
+  display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4);
+}
+.sa-unstated {
+  display: flex; flex-wrap: wrap; gap: var(--s2);
+  margin-top: var(--s2);
+}
+.sa-unstated > span {
+  font-size: .76rem; color: var(--muted);
+  border: 1px dashed var(--border); border-radius: var(--radius-sm);
+  padding: .15rem var(--s2); background: var(--bg);
+}
+
 /* ---------- Footer ---------- */
 .sa-footer {
   margin-top: var(--s10); padding-top: var(--s6);

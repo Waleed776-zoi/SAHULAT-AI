@@ -28,12 +28,13 @@ from pathlib import Path
 
 import streamlit as st
 
-from core.ad_reader import read_ad
+from core.ad_reader import build_record, extract_raw, read_ad
 from core.data_loader import (
     KNOWN_CATEGORIES, catalogue_health, category_counts, load_all_opportunities,
 )
 from core.i18n import (
-    computer_label, describe_check, describe_profile, education_label,
+    computer_label, describe_check, describe_profile, describe_requirements,
+    education_label,
     english_label, field_of_study_label, gender_label, join_list,
     priority_group_label, profile_field_label, status_label, t,
     validation_message,
@@ -343,6 +344,7 @@ def init_state() -> None:
         "is_demo": False,
         "uploaded_opportunity": None,
         "uploaded_raw": None,
+        "upload_match": None,
         "screen_upload": False,
         "explanations": {},
         "documents_ready": {},
@@ -891,6 +893,151 @@ def render_documents(opportunity) -> None:
         st.progress(len(ready) / total)
 
 
+def stage_markup(labels, active: int, note: str = "") -> str:
+    """
+    The staged-processing panel (UX-10).
+
+    `active` is the index of the step currently running; everything before it
+    has genuinely finished. Rendering is pure - the caller writes this into a
+    slot at real step boundaries, so the panel can never claim progress that
+    has not happened.
+    """
+    rows = []
+    for index, label in enumerate(labels):
+        if index < active:
+            state, dot, track = "is-done", "\u2713", ""
+        elif index == active:
+            state, dot = "is-active", str(index + 1)
+            track = '<div class="sa-stage-track"><span></span></div>'
+        else:
+            state, dot, track = "is-pending", str(index + 1), ""
+        rows.append(f'<div class="sa-stage {state}">'
+                    f'<span class="sa-stage-dot">{dot}</span>'
+                    f'<span class="sa-stage-body">'
+                    f'<span class="sa-stage-label">{label}</span>{track}</span></div>')
+    footer = f'<div class="sa-stage-note">{note}</div>' if note else ""
+    return f'<div class="sa-stages">{"".join(rows)}{footer}</div>'
+
+
+def read_ad_in_stages(file_bytes: bytes, mime_type: str, screenable: bool):
+    """
+    Run the upload pipeline, showing each step as it actually happens.
+
+    Streamlit streams each write to the browser as the script produces it, so
+    updating one slot between real calls animates the panel without threads,
+    timers or a fabricated wait. The AI read is the only slow step - several
+    seconds - and it is the one the indicator sits on.
+
+    Steps that finish instantly are not padded to look slower. They stay
+    readable because every stage is on screen from the start (dimmed), so the
+    reader watches a list resolve rather than labels flashing past.
+
+    Returns (opportunity, raw, match). The screening result is kept rather
+    than recomputed: the last stage claims that work was done, so the page
+    must actually show the output of that work.
+    """
+    labels = [t("stage_prepare", lang), t("stage_read", lang), t("stage_structure", lang)]
+    if screenable:
+        labels.append(t("stage_screen", lang))
+
+    slot = st.empty()
+
+    def show(active: int) -> None:
+        slot.markdown(stage_markup(labels, active, t("stage_running_note", lang)),
+                      unsafe_allow_html=True)
+
+    show(0)
+    mime_type = mime_type or "application/octet-stream"
+
+    show(1)
+    raw = extract_raw(file_bytes, mime_type, language=lang)
+
+    show(2)
+    opportunity, raw = build_record(raw)
+
+    match = None
+    if screenable:
+        show(3)
+        match = evaluate(current_profile(), opportunity)
+
+    slot.empty()
+    return opportunity, raw, match
+
+
+def render_extraction(opportunity, raw: dict) -> None:
+    """
+    Present what was read as a document summary, not a data dump (UX-10).
+
+    The raw JSON is still one click away - an uploaded record is unverified by
+    definition, so the exact model output has to stay auditable - but it is no
+    longer the first thing a user meets.
+    """
+    st.markdown(f'<div class="sa-extract-title">{opportunity.name}</div>',
+                unsafe_allow_html=True)
+    if opportunity.summary_en:
+        st.markdown(f'<div class="sa-extract-lede">{opportunity.summary_en}</div>',
+                    unsafe_allow_html=True)
+
+    meta = [f'{t("provider_label", lang)}: {opportunity.provider}']
+    if opportunity.category and opportunity.category != "unknown":
+        meta.append(f'{t("extracted_category", lang)}: '
+                    f'{t("category_" + opportunity.category, lang)}')
+    deadline = opportunity.eligibility_conditions.application_deadline
+    if deadline:
+        meta.append(f'{t("extracted_deadline", lang)}: {deadline}')
+    st.markdown('<div class="sa-extract-meta">'
+                + "".join(f"<span>{m}</span>" for m in meta) + "</div>",
+                unsafe_allow_html=True)
+
+    stated, unstated = describe_requirements(opportunity.eligibility_conditions, lang)
+
+    rule()
+    st.markdown(f"**{t('extracted_requirements', lang)}**")
+    if stated:
+        st.markdown(
+            "".join(f'<div class="sa-answer">'
+                    f'<span class="sa-answer-label">{title}</span>'
+                    f'<span class="sa-answer-value">{value}</span></div>'
+                    for title, value in stated),
+            unsafe_allow_html=True)
+    else:
+        st.caption(t("extracted_nothing", lang))
+
+    if unstated:
+        st.markdown(f'<div class="sa-stage-note">{t("extracted_not_stated", lang)}</div>'
+                    '<div class="sa-unstated">'
+                    + "".join(f"<span>{u}</span>" for u in unstated) + "</div>",
+                    unsafe_allow_html=True)
+        st.caption(t("extracted_not_stated_note", lang))
+
+    quota = opportunity.eligibility_conditions.special_quota_note
+    if quota:
+        rule()
+        st.markdown(f"**{t('extracted_quota', lang)}**")
+        st.caption(quota)
+
+    if opportunity.required_documents:
+        rule()
+        st.markdown(f"**{t('extracted_documents', lang)}**")
+        for document in opportunity.required_documents:
+            st.markdown(f"- {document}")
+
+    if opportunity.application_steps:
+        rule()
+        st.markdown(f"**{t('extracted_steps', lang)}**")
+        for index, step in enumerate(opportunity.application_steps, 1):
+            st.markdown(f"{index}. {step}")
+
+    if opportunity.official_url:
+        st.markdown(f'<a class="sa-source-link" href="{opportunity.official_url}"'
+                    f' target="_blank" rel="noopener">{t("open_official_site", lang)}'
+                    f' <span class="sa-arrow">\u2197</span></a>', unsafe_allow_html=True)
+
+    with st.expander(t("raw_extraction_toggle", lang)):
+        st.caption(t("raw_extraction_note", lang))
+        st.json(raw)
+
+
 def render_timeline(opportunity) -> None:
     if not opportunity.application_steps:
         return
@@ -1208,11 +1355,14 @@ with tab_read:
         with action_col:
             st.caption(t("upload_privacy_note", lang))
             if st.button(t("upload_ad_button", lang), type="primary"):
-                with st.spinner(""):
-                    extracted, raw = read_ad(file_bytes, mime_type, language=lang)
+                screenable = current_profile().is_screenable()
+                extracted, raw, match = read_ad_in_stages(file_bytes, mime_type, screenable)
                 st.session_state.uploaded_opportunity = extracted
                 st.session_state.uploaded_raw = raw
-                st.session_state.screen_upload = False
+                st.session_state.upload_match = match
+                # Screening already ran as the last stage when we had the
+                # answers for it - do not make the user ask for it again.
+                st.session_state.screen_upload = screenable
 
     if st.session_state.uploaded_opportunity is not None:
         opportunity = st.session_state.uploaded_opportunity
@@ -1226,6 +1376,7 @@ with tab_read:
             if st.button(t("upload_clear", lang), use_container_width=True):
                 st.session_state.uploaded_opportunity = None
                 st.session_state.uploaded_raw = None
+                st.session_state.upload_match = None
                 st.session_state.screen_upload = False
                 st.rerun()
 
@@ -1242,22 +1393,24 @@ with tab_read:
             with st.expander(t("technical_details", lang)):
                 st.code(str(raw["_error"]))
 
-        st.markdown(f"**{opportunity.name}**")
-        if opportunity.summary_en:
-            st.write(opportunity.summary_en)
-        st.caption(f"{t('provider_label', lang)}: {opportunity.provider}")
-
-        with st.expander(t("raw_extraction_toggle", lang)):
-            st.json(raw)
+        render_extraction(opportunity, raw)
 
         rule()
         if not current_profile().is_screenable():
             callout(t("upload_needs_profile", lang), tone="info")
         else:
-            if st.button(t("screen_uploaded", lang), type="primary"):
-                st.session_state.screen_upload = True
-            if st.session_state.screen_upload:
-                render_match_card(evaluate(current_profile(), opportunity))
+            if not st.session_state.screen_upload:
+                if st.button(t("screen_uploaded", lang), type="primary"):
+                    st.session_state.screen_upload = True
+                    st.session_state.upload_match = evaluate(current_profile(), opportunity)
+                    st.rerun()
+            else:
+                match = st.session_state.get("upload_match")
+                # Answers may have changed since the reading ran.
+                if match is None or match.opportunity is not opportunity:
+                    match = evaluate(current_profile(), opportunity)
+                    st.session_state.upload_match = match
+                render_match_card(match)
 
     st.caption(t("upload_privacy_note", lang))
 

@@ -4,7 +4,7 @@
 Companion to `README.md` (which is the *setup* guide). This file is the *work* guide.
 
 - **Created:** 2026-09-10
-- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Interaction refinement pass: checklist fix, visible field states, motion. 38 items closed, 132 tests passing
+- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Interaction refinement pass: checklist fix, visible field states, motion. 39 items closed, 143 tests passing
 - **Baseline audited:** full read of all 10 source files, 5 data files, config, and a live environment verification run.
 
 ---
@@ -54,7 +54,7 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **132/132 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Unit tests | **143/143 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **3** opportunities: `hec_balochistan_fata_ug` (scholarship), `navttc_hunarmand_pakistan` (skills), `peef_punjab_undergraduate` (scholarship) |
 | Job records loaded | **0** — all `njp_jobs_sample.json` entries are `REPLACE ME` placeholders and are correctly skipped by the loader |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
@@ -110,6 +110,7 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | DATA-03 | "Jobs" category is selectable but always returns nothing | data + `app.py` | **P1** | **DONE** | — |
 | OPS-01 | No error handling around any Gemini call | `llm_client.py` | **P1** | **DONE** | — |
 | OPS-02 | Confirm model name against the live API | `llm_client.py` | **P1** | **DONE** | — |
+| UX-10 | Upload result was a raw JSON dump; no feedback during the AI read | `app.py` + `ad_reader.py` | **P1** | **DONE** | — |
 | UX-07 | Document checklist count/bar lagged one interaction behind | `app.py` | **P0** | **DONE** | — |
 | UX-08 | Form fields had no visible boundary until clicked | `styles/` | **P0** | **DONE** | — |
 | UX-09 | No motion system; header was not a distinct layer | `styles/` + `app.py` | **P1** | **DONE** | — |
@@ -422,6 +423,89 @@ ceiling into structured fields.
 - [x] Model name confirmed against the live API.
 - [x] A real text generation succeeds, in both languages.
 - [x] A real image extraction succeeds.
+
+---
+
+#### UX-10 — Upload result was a raw JSON dump, and the AI read gave no feedback
+**Area:** `app.py`, `core/ad_reader.py`, `core/i18n.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
+
+**What was wrong**
+Two separate problems in the same flow, both reported from the running app.
+
+1. **The result was a data dump.** After reading an ad, the page showed the
+   name, a summary line, and then `st.json(raw)` — a nested structure with
+   thirteen `NULL` fields. The most prominent thing on the page was the part a
+   user has least use for.
+2. **Nothing happened for ~12 seconds.** The model call is genuinely slow
+   (measured 8.5–12.0s on real uploads), and the only feedback was a bare
+   spinner. The work is real, visible progress was not.
+
+**What was done — presentation**
+`render_extraction()` renders a document summary: title, lede, provider,
+category, deadline, then **conditions stated in this document** as
+label → value rows, then **documents it asks for** and **how to apply**.
+
+The conditions are rendered by a new `i18n.describe_requirements()`, which
+builds a `ConditionCheck` and reuses `check_title()` / `_requirement_text()`.
+That is deliberate: a condition now reads *identically* whether it is being
+explained from a document or evaluated against a profile, because exactly one
+place turns a machine key plus a structured value into prose. Both languages.
+
+**Unstated conditions are shown, not hidden** — as dashed chips, with: *"Nothing
+was found about these, so they are not checked against you. That is not the
+same as qualifying."* A null in an extraction means the document was silent,
+and silence must never read as a pass.
+
+The raw JSON stays, one click away, under *Show exactly what the model
+returned*. An uploaded record is unverified by definition, so the exact model
+output has to remain auditable — it just is not the first thing a user meets.
+
+**What was done — staged processing**
+`read_ad()` was split into `extract_raw()` (the model call) and
+`build_record()` (local structuring), so real stage boundaries exist to report
+on. `read_ad_in_stages()` writes a four-stage panel into one slot and advances
+it **between real calls**:
+
+> Preparing your file → Reading the document with AI → Structuring what it
+> says → Checking it against your answers
+
+Streamlit streams each write as the script produces it, so this needs no
+threads, no timers and no `sleep`. The reading stage is shown *before* the
+model call and the structuring stage only *after* it returns — asserted by a
+test that records the interleaving.
+
+Stages that finish instantly are **not padded to look slower**. They stay
+legible because all four are on screen from the start, dimmed and slightly
+blurred, sharpening as each becomes active and ticking as it completes: a list
+resolving, rather than labels flashing past. The indicator is indeterminate —
+it says *working*, never a percentage we do not have.
+
+Screening now runs as the fourth stage when the profile is complete, and the
+result is kept rather than recomputed, because a stage that claims work was
+done must produce the output of that work. The old "Screen this against my
+profile" button remains only for when there are no answers yet.
+
+**Relationship to UX-09.** The earlier refusal stands and is not contradicted:
+spec 10.1 forbids faking a delay *for instant local operations*, which is why
+rules matching still reveals instantly. This is the opposite case — a real
+remote call taking ten seconds — which is precisely when the spec asks for a
+staged sequence. The distinction is not "does it look better with stages", it
+is "is something actually happening".
+
+**Reduced motion:** the blanket 1ms rule would strobe a looping indicator, and
+a 38%-wide bar frozen mid-track would read as "38% complete" — a number we do
+not have. Under `prefers-reduced-motion` the indicator becomes a still,
+full-width bar and the pending blur is dropped.
+
+**Acceptance criteria**
+- [x] Extraction reads as a document summary; raw JSON behind a disclosure.
+- [x] Conditions rendered in prose, in both languages, via shared i18n.
+- [x] Unstated conditions visible and explicitly not counted as qualifying.
+- [x] Stage panel advances on real call boundaries, verified by test.
+- [x] No fabricated delay, no fabricated percentage.
+- [x] Screening result shown, not recomputed or discarded.
+- [x] `prefers-reduced-motion` handled for the indicator specifically.
+- [x] Verified end to end against a live model call (12.0s) on a real image.
 
 ---
 
@@ -1164,6 +1248,8 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-11 | **UX-10** — staged progress here, but still not on the results page | The test is whether real work is happening, not whether it looks better. The ad read is a remote call taking 8–12s; rules matching is local and instant. Same rule (spec 10.1), opposite answer | Claude |
+| 2026-09-11 | **UX-10** — show what the document did *not* say | A null condition means the document was silent, and silence must never render as a pass. Unstated conditions are listed with an explicit caveat rather than omitted | Claude |
 | 2026-09-11 | **OPS-02** — pin `gemini-3.5-flash`, not `gemini-flash-latest` | An alias can change model underneath a live demo, and `-latest` returned 503 when tested. An explicit version is reproducible; `GEMINI_MODEL` still overrides it without a code change | Claude |
 | 2026-09-11 | **PERF-05** — the status chip may read "available" for a malformed key | The alternative costs ~3s on every interaction to pre-validate. Every call path is wrapped, so a bad key surfaces as a labelled message at the point of use instead | Claude |
 | 2026-09-11 | **UX-09** — no fake "Finding your matches…" delay | The spec asks for the sequence but its own rule 10.1 forbids faking one for instant local work. Rules matching is local and instant; the honest version (count first, then staggered reveal) is implemented instead | Claude |
@@ -1203,6 +1289,9 @@ Append one line per completed piece of work.
 | 2026-09-11 | PERF-01..04 | Lazy + `@st.cache_resource` retrieval, offline model loading, opt-in semantic search, `.streamlit/config.toml`. **First render measured at 1.07s** (was ~30-35s), with no heavy modules imported at page load. |
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
+| 2026-09-11 | UX-10 | Upload result rebuilt as a readable document summary (raw JSON moved behind a disclosure); conditions rendered in prose via a shared i18n path, with unstated ones shown and explicitly not counted as qualifying. |
+| 2026-09-11 | UX-10 | `read_ad()` split into `extract_raw()` + `build_record()` so a four-stage progress panel can advance on real call boundaries during the ~12s model read. No timers, no padded delays. |
+| 2026-09-11 | TEST-01 | Suite grown 132 → **143 tests**. |
 | 2026-09-11 | OPS-02 | **Unblocked — key configured.** `gemini-2.0-flash` was found to be **retired (404)**; every AI feature would have failed at once. Six candidates measured; `gemini-3.5-flash` chosen and verified on the text, Urdu and image paths. |
 | 2026-09-11 | PERF-05 | **Regression caught during that verification** — `is_ai_available()` built an SDK client on every render, adding ~3s per interaction, but only when a key existed. Made free; client now cached and lazily built. Suite 200s → 15.5s. |
 | 2026-09-11 | *(fixed)* | `.streamlit/secrets.toml` had the key pasted unquoted, so the TOML failed to parse and Streamlit fell back to mock mode without saying why. Quotes added. |
