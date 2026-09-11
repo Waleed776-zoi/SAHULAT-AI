@@ -5,18 +5,27 @@ Unit tests for core/rules_engine.py - run with:  python -m pytest tests/
 These tests use zero external dependencies (no Gemini, no chromadb) since
 the rules engine must be independently correct - it's the piece the whole
 "rules decide, LLM explains" architecture depends on.
+
+Assertions are made against machine keys (STATUS_*, MET/UNMET/UNKNOWN), never
+against display prose - the engine is language-free by design (I18N-02).
 """
 import unittest
+from datetime import date
 
-from core.models import UserProfile, Opportunity, EligibilityConditions
-from core.rules_engine import evaluate
+from core.models import (
+    CHECK_DEADLINE, CHECK_EXISTING_SCHOLARSHIP, CHECK_INCOME, CHECK_EXPERIENCE,
+    EligibilityConditions, MET, NOT_APPLICABLE, Opportunity,
+    STATUS_ELIGIBLE, STATUS_NEEDS_VERIFICATION, STATUS_NOT_ELIGIBLE,
+    UNKNOWN, UNMET, UserProfile,
+)
+from core.rules_engine import evaluate, evaluate_all, summarize_counts
 
 
-def make_opportunity(**kwargs) -> Opportunity:
+def make_opportunity(name: str = "Test Opportunity", **kwargs) -> Opportunity:
     conditions = EligibilityConditions(**kwargs)
     return Opportunity(
         opportunity_id="test_opp",
-        name="Test Opportunity",
+        name=name,
         category="scholarship",
         provider="Test Provider",
         province_scope="Balochistan",
@@ -29,6 +38,10 @@ def make_opportunity(**kwargs) -> Opportunity:
         source_title="Test source",
         last_verified="2026-01-01",
     )
+
+
+def find(result, key):
+    return [c for c in result.checks if c.key == key][0]
 
 
 class TestRulesEngine(unittest.TestCase):
@@ -44,53 +57,165 @@ class TestRulesEngine(unittest.TestCase):
             age=20, domicile_province="Balochistan",
             education_level="bachelor", marks_percentage=72,
         )
-        result = evaluate(profile, opp)
-        self.assertEqual(result.overall_status, "Likely Eligible")
+        self.assertEqual(evaluate(profile, opp).overall_status, STATUS_ELIGIBLE)
 
     def test_hard_fail_on_domicile(self):
         opp = make_opportunity(domicile_provinces=["Balochistan"])
-        profile = UserProfile(domicile_province="Punjab")
-        result = evaluate(profile, opp)
-        self.assertEqual(result.overall_status, "Likely Not Eligible")
+        result = evaluate(UserProfile(domicile_province="Punjab"), opp)
+        self.assertEqual(result.overall_status, STATUS_NOT_ELIGIBLE)
+
+    def test_domicile_match_is_case_insensitive(self):
+        opp = make_opportunity(domicile_provinces=["Balochistan"])
+        result = evaluate(UserProfile(domicile_province="  balochistan "), opp)
+        self.assertEqual(result.overall_status, STATUS_ELIGIBLE)
 
     def test_needs_verification_on_missing_data(self):
         opp = make_opportunity(min_marks_percentage=60)
-        profile = UserProfile(age=20)  # marks not provided
-        result = evaluate(profile, opp)
-        self.assertEqual(result.overall_status, "Needs Verification")
+        result = evaluate(UserProfile(age=20), opp)  # marks not provided
+        self.assertEqual(result.overall_status, STATUS_NEEDS_VERIFICATION)
         self.assertIn("marks_percentage", result.missing_profile_fields)
 
     def test_income_ceiling_respected(self):
         opp = make_opportunity(max_monthly_household_income=60000)
         under = evaluate(UserProfile(monthly_household_income=40000), opp)
         over = evaluate(UserProfile(monthly_household_income=80000), opp)
-        self.assertEqual(under.overall_status, "Likely Eligible")
-        self.assertEqual(over.overall_status, "Likely Not Eligible")
+        self.assertEqual(under.overall_status, STATUS_ELIGIBLE)
+        self.assertEqual(over.overall_status, STATUS_NOT_ELIGIBLE)
+
+    def test_income_boundary_is_inclusive(self):
+        opp = make_opportunity(max_monthly_household_income=60000)
+        exact = evaluate(UserProfile(monthly_household_income=60000), opp)
+        self.assertEqual(exact.overall_status, STATUS_ELIGIBLE)
 
     def test_education_rank_comparison(self):
         opp = make_opportunity(min_education_level="intermediate")
         below = evaluate(UserProfile(education_level="matric"), opp)
         above = evaluate(UserProfile(education_level="bachelor"), opp)
-        self.assertEqual(below.overall_status, "Likely Not Eligible")
-        self.assertEqual(above.overall_status, "Likely Eligible")
+        self.assertEqual(below.overall_status, STATUS_NOT_ELIGIBLE)
+        self.assertEqual(above.overall_status, STATUS_ELIGIBLE)
 
     def test_existing_scholarship_exclusivity(self):
         opp = make_opportunity(must_not_have_existing_scholarship=True)
-        already_has_one = evaluate(UserProfile(has_existing_scholarship=True), opp)
-        does_not_have_one = evaluate(UserProfile(has_existing_scholarship=False), opp)
-        self.assertEqual(already_has_one.overall_status, "Likely Not Eligible")
-        self.assertEqual(does_not_have_one.overall_status, "Likely Eligible")
+        has_one = evaluate(UserProfile(has_existing_scholarship=True), opp)
+        has_none = evaluate(UserProfile(has_existing_scholarship=False), opp)
+        self.assertEqual(has_one.overall_status, STATUS_NOT_ELIGIBLE)
+        self.assertEqual(has_none.overall_status, STATUS_ELIGIBLE)
+        self.assertEqual(find(has_none, CHECK_EXISTING_SCHOLARSHIP).status, MET)
 
     def test_no_conditions_means_always_eligible(self):
         opp = make_opportunity()  # every condition null
-        result = evaluate(UserProfile(), opp)
-        self.assertEqual(result.overall_status, "Likely Eligible")
+        self.assertEqual(evaluate(UserProfile(), opp).overall_status, STATUS_ELIGIBLE)
 
-    def test_expired_job_deadline_flagged(self):
+    def test_age_range_boundaries(self):
+        opp = make_opportunity(min_age=18, max_age=35)
+        for age, expected in ((17, STATUS_NOT_ELIGIBLE), (18, STATUS_ELIGIBLE),
+                              (35, STATUS_ELIGIBLE), (36, STATUS_NOT_ELIGIBLE)):
+            with self.subTest(age=age):
+                self.assertEqual(evaluate(UserProfile(age=age), opp).overall_status, expected)
+
+
+class TestZeroValuesAreRealAnswers(unittest.TestCase):
+    """BUG-03: 0 is a valid answer, not a missing one."""
+
+    def test_zero_income_is_met_not_unknown(self):
+        opp = make_opportunity(max_monthly_household_income=60000)
+        result = evaluate(UserProfile(monthly_household_income=0), opp)
+        self.assertEqual(find(result, CHECK_INCOME).status, MET)
+        self.assertEqual(result.overall_status, STATUS_ELIGIBLE)
+        self.assertNotIn("monthly_household_income", result.missing_profile_fields)
+
+    def test_unanswered_income_is_unknown(self):
+        opp = make_opportunity(max_monthly_household_income=60000)
+        result = evaluate(UserProfile(monthly_household_income=None), opp)
+        self.assertEqual(find(result, CHECK_INCOME).status, UNKNOWN)
+        self.assertEqual(result.overall_status, STATUS_NEEDS_VERIFICATION)
+
+    def test_zero_experience_is_a_real_answer(self):
+        opp = make_opportunity(min_experience_years=0)
+        result = evaluate(UserProfile(years_experience=0), opp)
+        self.assertEqual(find(result, CHECK_EXPERIENCE).status, MET)
+
+
+class TestDeadlineIsAboutTheListing(unittest.TestCase):
+    """BUG-04: an expired listing is not the user being ineligible."""
+
+    def setUp(self):
+        self.today = date(2026, 6, 15)
+
+    def test_expired_deadline_flagged_as_closed(self):
         opp = make_opportunity(application_deadline="2020-01-01")
-        result = evaluate(UserProfile(), opp)
-        deadline_check = [c for c in result.checks if c.label == "Application deadline"][0]
-        self.assertEqual(deadline_check.status, "unmet")
+        result = evaluate(UserProfile(), opp, today=self.today)
+        self.assertTrue(result.listing_closed)
+        self.assertEqual(find(result, CHECK_DEADLINE).status, UNMET)
+
+    def test_expired_deadline_does_not_make_user_ineligible(self):
+        opp = make_opportunity(application_deadline="2020-01-01",
+                               min_age=18, max_age=30)
+        result = evaluate(UserProfile(age=25), opp, today=self.today)
+        # The person qualifies; only the listing is closed.
+        self.assertEqual(result.overall_status, STATUS_ELIGIBLE)
+        self.assertTrue(result.listing_closed)
+
+    def test_future_deadline_is_open(self):
+        opp = make_opportunity(application_deadline="2026-12-31")
+        result = evaluate(UserProfile(), opp, today=self.today)
+        self.assertFalse(result.listing_closed)
+        self.assertEqual(find(result, CHECK_DEADLINE).status, MET)
+
+    def test_unparseable_deadline_is_unknown_not_closed(self):
+        opp = make_opportunity(application_deadline="REPLACE ME: YYYY-MM-DD")
+        result = evaluate(UserProfile(), opp, today=self.today)
+        self.assertFalse(result.listing_closed)
+        self.assertEqual(find(result, CHECK_DEADLINE).status, UNKNOWN)
+
+    def test_absent_deadline_emits_na_check(self):
+        """BUG-07: the checks list has a consistent shape for every record."""
+        result = evaluate(UserProfile(), make_opportunity(), today=self.today)
+        self.assertEqual(find(result, CHECK_DEADLINE).status, NOT_APPLICABLE)
+
+
+class TestNoUserFacingProse(unittest.TestCase):
+    """I18N-02: the engine must stay language-free."""
+
+    def test_checks_carry_keys_and_structured_values_only(self):
+        opp = make_opportunity(min_age=18, max_age=30,
+                               domicile_provinces=["Punjab"],
+                               max_monthly_household_income=50000)
+        result = evaluate(UserProfile(age=25, domicile_province="Punjab",
+                                      monthly_household_income=10000), opp)
+        for check in result.checks:
+            self.assertIsInstance(check.key, str)
+            self.assertFalse(hasattr(check, "detail"),
+                             "ConditionCheck must not carry prose")
+            self.assertFalse(hasattr(check, "label"),
+                             "ConditionCheck must not carry prose")
+
+
+class TestEvaluateAll(unittest.TestCase):
+
+    def test_sorted_best_match_first(self):
+        eligible = make_opportunity(name="B eligible")
+        ineligible = make_opportunity(name="A ineligible", min_age=99)
+        results = evaluate_all(UserProfile(age=20), [ineligible, eligible])
+        self.assertEqual(results[0].overall_status, STATUS_ELIGIBLE)
+        self.assertEqual(results[-1].overall_status, STATUS_NOT_ELIGIBLE)
+
+    def test_open_listings_rank_above_closed_at_same_status(self):
+        today = date(2026, 6, 15)
+        closed = make_opportunity(name="A closed", application_deadline="2020-01-01")
+        open_one = make_opportunity(name="Z open", application_deadline="2026-12-31")
+        results = evaluate_all(UserProfile(), [closed, open_one], today=today)
+        self.assertFalse(results[0].listing_closed)
+
+    def test_summarize_counts(self):
+        results = evaluate_all(
+            UserProfile(age=20),
+            [make_opportunity(name="ok"), make_opportunity(name="no", min_age=99)],
+        )
+        totals = summarize_counts(results)
+        self.assertEqual(totals["total"], 2)
+        self.assertEqual(totals[STATUS_ELIGIBLE], 1)
+        self.assertEqual(totals[STATUS_NOT_ELIGIBLE], 1)
 
 
 if __name__ == "__main__":

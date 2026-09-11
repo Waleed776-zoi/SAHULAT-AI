@@ -9,38 +9,133 @@ Set GEMINI_API_KEY as an environment variable or in .streamlit/secrets.toml
 (see README). If no key is configured, every function falls back to a
 clearly-labeled mock response so the rest of the app (UI, rules engine)
 remains fully testable without a key or network access.
+
+SDK SUPPORT (OPS-02): the legacy `google-generativeai` package is end-of-life
+and prints a deprecation notice on import. This module prefers the current
+`google-genai` SDK when it is installed and transparently falls back to the
+legacy one, so the app keeps working either way. To migrate, just run:
+    pip install google-genai
+
+FAILURE POLICY (OPS-01): a network error, rate limit or safety block must
+never take the page down. Every call is wrapped; on failure the caller gets a
+clearly-labelled message and the rules-based result is unaffected.
 """
 from __future__ import annotations
 
 import json
+import logging
 import os
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
-MODEL_NAME = "gemini-2.0-flash"  # confirm current recommended free-tier Flash model name before building
+from core.i18n import t
+
+log = logging.getLogger(__name__)
+
+# Overridable without a code change - see PROJECT_TRACKER.md OPS-02, which
+# still requires someone to confirm this against the live API once a key exists.
+DEFAULT_MODEL_NAME = "gemini-2.0-flash"
+
+SDK_NEW = "google-genai"
+SDK_LEGACY = "google-generativeai"
 
 
-def _get_api_key() -> Optional[str]:
-    key = os.environ.get("GEMINI_API_KEY")
-    if key:
-        return key
+def _get_secret(name: str) -> Optional[str]:
+    """Read a setting from the environment, else from Streamlit secrets."""
+    value = os.environ.get(name)
+    if value:
+        return value
     try:
-        import streamlit as st  # local import - keeps this module usable outside Streamlit too
-        return st.secrets.get("GEMINI_API_KEY")
+        import streamlit as st  # local import - keeps this module usable outside Streamlit
+        return st.secrets.get(name)
     except Exception:
         return None
 
 
-def _client():
-    """Returns a configured genai client, or None if no key is available."""
+def _get_api_key() -> Optional[str]:
+    return _get_secret("GEMINI_API_KEY")
+
+
+def model_name() -> str:
+    return _get_secret("GEMINI_MODEL") or DEFAULT_MODEL_NAME
+
+
+def _client() -> Optional[Tuple[str, Any]]:
+    """
+    Returns (sdk_flavour, client_object) or None when no key / no SDK.
+    Prefers the current SDK; falls back to the deprecated one.
+    """
     api_key = _get_api_key()
     if not api_key:
         return None
+
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        return genai
+        from google import genai  # google-genai (current)
+        return SDK_NEW, genai.Client(api_key=api_key)
     except ImportError:
+        pass
+    except Exception as exc:  # malformed key, etc.
+        log.warning("google-genai client init failed: %s", exc)
+
+    try:
+        import google.generativeai as genai_legacy  # deprecated, still supported
+        genai_legacy.configure(api_key=api_key)
+        return SDK_LEGACY, genai_legacy
+    except ImportError:
+        log.warning("No Gemini SDK installed - falling back to mock mode.")
         return None
+    except Exception as exc:
+        log.warning("Legacy Gemini client init failed: %s", exc)
+        return None
+
+
+def is_ai_available() -> bool:
+    """True when a real model call could be made. Used by the UI status chip."""
+    return _client() is not None
+
+
+def active_sdk() -> Optional[str]:
+    client = _client()
+    return client[0] if client else None
+
+
+# ---------------------------------------------------------------------------
+# Internal: one generation path for both SDKs
+# ---------------------------------------------------------------------------
+
+def _generate(system_prompt: str, parts: List[Any]) -> str:
+    """
+    Run a generation against whichever SDK is active.
+
+    `parts` items are either plain strings or dicts of
+    {"mime_type": str, "data": bytes} for file input.
+    Raises on failure - callers are responsible for catching (see OPS-01).
+    """
+    client = _client()
+    if client is None:
+        raise RuntimeError("No Gemini client configured")
+
+    flavour, handle = client
+
+    if flavour == SDK_NEW:
+        from google.genai import types
+        contents: List[Any] = []
+        for part in parts:
+            if isinstance(part, dict):
+                contents.append(types.Part.from_bytes(
+                    data=part["data"], mime_type=part["mime_type"]))
+            else:
+                contents.append(part)
+        response = handle.models.generate_content(
+            model=model_name(),
+            contents=contents,
+            config=types.GenerateContentConfig(system_instruction=system_prompt),
+        )
+        return (response.text or "").strip()
+
+    # Legacy SDK
+    model = handle.GenerativeModel(model_name(), system_instruction=system_prompt)
+    response = model.generate_content(parts)
+    return (response.text or "").strip()
 
 
 # ---------------------------------------------------------------------------
@@ -59,16 +154,16 @@ STRICT RULES:
   status language provided to you (e.g. "Likely Eligible").
 - If documents or steps are provided, you may summarize them, but do not
   add new ones.
+- If a condition is marked unknown, say plainly what the user should provide
+  to resolve it. Never guess the missing value.
 - Keep it concise: 3-6 sentences plus a short bullet list if useful.
 """
 
 
 def explain_match(profile_summary: str, match_result_summary: str, language: str = "en") -> str:
-    client = _client()
-    if client is None:
+    if _client() is None:
         return _mock_explanation(match_result_summary, language)
 
-    model = client.GenerativeModel(MODEL_NAME, system_instruction=EXPLAIN_SYSTEM_PROMPT)
     lang_instruction = "Respond in Urdu." if language == "ur" else "Respond in English."
     prompt = (
         f"{lang_instruction}\n\n"
@@ -76,14 +171,15 @@ def explain_match(profile_summary: str, match_result_summary: str, language: str
         f"Deterministic eligibility result (already decided - explain, do not change):\n"
         f"{match_result_summary}"
     )
-    response = model.generate_content(prompt)
-    return response.text
+    try:
+        return _generate(EXPLAIN_SYSTEM_PROMPT, [prompt])
+    except Exception as exc:
+        log.warning("explain_match failed: %s", exc)
+        return t("ai_unavailable", language)
 
 
 def _mock_explanation(match_result_summary: str, language: str) -> str:
-    if language == "ur":
-        return f"[مقامی موڈ - کوئی Gemini کلید موجود نہیں]\n\n{match_result_summary}"
-    return f"[Local mock mode - no Gemini API key configured]\n\n{match_result_summary}"
+    return f"{t('ai_mock_notice', language)}\n\n{match_result_summary}"
 
 
 # ---------------------------------------------------------------------------
@@ -100,22 +196,26 @@ evidence. Keep answers short and cite which opportunity the evidence came from.
 
 
 def answer_followup(question: str, evidence_snippets: List[str], language: str = "en") -> str:
-    client = _client()
-    if client is None:
+    # No evidence means no grounded answer is possible. Say so rather than
+    # letting the model improvise (BUG-06).
+    if not evidence_snippets:
+        return t("no_evidence_found", language)
+
+    if _client() is None:
         return _mock_chat_answer(question, language)
 
-    model = client.GenerativeModel(MODEL_NAME, system_instruction=CHAT_SYSTEM_PROMPT)
     lang_instruction = "Respond in Urdu." if language == "ur" else "Respond in English."
-    evidence_block = "\n---\n".join(evidence_snippets) if evidence_snippets else "(no evidence retrieved)"
+    evidence_block = "\n---\n".join(evidence_snippets)
     prompt = f"{lang_instruction}\n\nEvidence:\n{evidence_block}\n\nQuestion: {question}"
-    response = model.generate_content(prompt)
-    return response.text
+    try:
+        return _generate(CHAT_SYSTEM_PROMPT, [prompt])
+    except Exception as exc:
+        log.warning("answer_followup failed: %s", exc)
+        return t("ai_unavailable", language)
 
 
 def _mock_chat_answer(question: str, language: str) -> str:
-    if language == "ur":
-        return "[مقامی موڈ] یہ سوال کا جواب دینے کے لیے Gemini API کلید درکار ہے۔"
-    return f"[Local mock mode] A configured Gemini API key is needed to answer: '{question}'"
+    return f"{t('ai_mock_notice', language)}\n\n> {question}"
 
 
 # ---------------------------------------------------------------------------
@@ -159,49 +259,78 @@ STRICT RULES:
 """
 
 
-def extract_opportunity_from_file(file_bytes: bytes, mime_type: str) -> Dict[str, Any]:
+def _strip_code_fences(raw: str) -> str:
+    """Gemini sometimes wraps JSON in ``` fences despite instructions."""
+    text = raw.strip()
+    if not text.startswith("```"):
+        return text
+    lines = text.splitlines()
+    if lines and lines[0].startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
+
+
+def extract_opportunity_from_file(file_bytes: bytes, mime_type: str,
+                                  language: str = "en") -> Dict[str, Any]:
     """
     Takes raw bytes of an uploaded image or PDF and returns a dict shaped
     like the schema above. Falls back to a clearly-labeled mock structure
     if no API key is configured, so the rest of the pipeline (UI, rules
     engine comparison) can still be developed/tested without a live key.
     """
-    client = _client()
-    if client is None:
-        return _mock_extraction()
+    if _client() is None:
+        return _mock_extraction(language)
 
-    model = client.GenerativeModel(MODEL_NAME, system_instruction=EXTRACTION_SYSTEM_PROMPT)
     file_part = {"mime_type": mime_type, "data": file_bytes}
-    response = model.generate_content([file_part, "Extract the structured record now."])
-
-    raw_text = response.text.strip()
-    # Gemini sometimes wraps JSON in ``` fences despite instructions - strip defensively.
-    if raw_text.startswith("```"):
-        raw_text = raw_text.strip("`")
-        if raw_text.lower().startswith("json"):
-            raw_text = raw_text[4:]
-
     try:
-        return json.loads(raw_text)
-    except json.JSONDecodeError:
+        raw_text = _generate(EXTRACTION_SYSTEM_PROMPT,
+                             [file_part, "Extract the structured record now."])
+    except Exception as exc:
+        log.warning("extract_opportunity_from_file failed: %s", exc)
         return {
             "name": None,
             "category": None,
+            "summary_en": t("ai_unavailable", language),
+            "eligibility_conditions": {},
+            "required_documents": [],
+            "application_steps": [],
+            "official_url_if_visible": None,
             "extraction_confidence": "low",
-            "_raw_model_output": raw_text,
-            "_error": "Model did not return valid JSON - show raw output to user for manual review.",
+            "_error": str(exc),
+        }
+
+    cleaned = _strip_code_fences(raw_text)
+    try:
+        parsed = json.loads(cleaned)
+        if not isinstance(parsed, dict):
+            raise ValueError("Top-level JSON value is not an object")
+        return parsed
+    except (json.JSONDecodeError, ValueError) as exc:
+        return {
+            "name": None,
+            "category": None,
+            "eligibility_conditions": {},
+            "required_documents": [],
+            "application_steps": [],
+            "extraction_confidence": "low",
+            "_raw_model_output": cleaned,
+            "_error": f"Model did not return valid JSON ({exc}) - "
+                      f"show raw output to user for manual review.",
         }
 
 
-def _mock_extraction() -> Dict[str, Any]:
+def _mock_extraction(language: str = "en") -> Dict[str, Any]:
     return {
-        "name": "[Local mock mode - no Gemini API key configured]",
+        "name": None,
         "category": None,
         "provider": None,
-        "summary_en": "Configure GEMINI_API_KEY to enable real ad reading.",
+        "summary_en": t("ai_mock_extraction_notice", language),
         "eligibility_conditions": {},
         "required_documents": [],
         "application_steps": [],
         "official_url_if_visible": None,
         "extraction_confidence": "low",
+        "_mock": True,
     }

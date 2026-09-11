@@ -4,7 +4,7 @@
 Companion to `README.md` (which is the *setup* guide). This file is the *work* guide.
 
 - **Created:** 2026-09-10
-- **Last updated:** 2026-09-10 (startup performance profiled; PERF-01..04 added; OPS-03 corrected)
+- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: landing page rebuilt, 26 items closed, 73 tests passing
 - **Baseline audited:** full read of all 10 source files, 5 data files, config, and a live environment verification run.
 
 ---
@@ -47,34 +47,38 @@ Sahulat AI screens a user's **non-identifying** profile (age, domicile, educatio
 
 ---
 
-## 2. Verified baseline (as of 2026-09-10)
+## 2. Verified baseline (as of 2026-09-11, branch `feature/ux-overhaul-and-fixes`)
 
 This is the confirmed state of the repo, established by actually running things — not by reading the README.
 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **8/8 pass** — `Ran 8 tests in 0.007s / OK` |
+| Unit tests | **73/73 pass** — `Ran 73 tests in 0.044s / OK` |
 | Data loader | Loads **3** opportunities: `hec_balochistan_fata_ug` (scholarship), `navttc_hunarmand_pakistan` (skills), `peef_punjab_undergraduate` (scholarship) |
 | Job records loaded | **0** — all `njp_jobs_sample.json` entries are `REPLACE ME` placeholders and are correctly skipped by the loader |
-| Dependencies | streamlit 1.63.0, google-generativeai 0.8.6, chromadb 1.5.9, sentence-transformers 6.0.1 — **all installed**, including the heavy optional pair |
-| Embedding model | `paraphrase-multilingual-MiniLM-L12-v2` **already cached** in the local HF hub → the real Chroma path will be attempted, not the keyword fallback |
+| Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
+| Embedding model | `paraphrase-multilingual-MiniLM-L12-v2` cached locally, but semantic search is now **opt-in** (`SAHULAT_SEMANTIC_SEARCH=1`); keyword search is the default |
+| First render | **1.07s**, with no torch/sentence-transformers/chromadb imported at page load (was ~30–35s) |
 | Gemini API key | **Not configured.** No `.env`, no `.streamlit/secrets.toml`. App runs in labelled mock mode. |
 | `scripts/` | Empty directory (consistent with README — `build_vector_store.py` was never written) |
-| Git | **Not a git repository yet.** See `OPS-04`. |
+| Git | Repo live at `github.com/Waleed776-zoi/SAHULAT-AI`; work branched on `feature/ux-overhaul-and-fixes` |
 
 ### Architecture map
 
 ```
-app.py  (Streamlit UI — 2 tabs: Catalog / Upload ad)
+app.py  (Streamlit UI — sidebar + 3 tabs: Find / Read an ad / How it works)
    |
    +-- core/data_loader.py --> data/opportunities/*.json --> Opportunity
    |
-   +-- core/rules_engine.py   THE decision layer. Pure stdlib, no LLM, no network.
+   +-- core/rules_engine.py   THE decision layer. Pure stdlib, no LLM, no network,
+   |       and no user-facing prose - emits keys + structured values.
    |       evaluate() -> 10 independent checks, each met | unmet | unknown | n/a
-   |       roll-up:  any "unmet"   -> "Likely Not Eligible"
-   |                 any "unknown" -> "Needs Verification"
-   |                 else          -> "Likely Eligible"
+   |       roll-up (profile conditions only):
+   |                 any "unmet"   -> not_eligible
+   |                 any "unknown" -> needs_verification
+   |                 else          -> eligible
+   |       deadline is reported separately as MatchResult.listing_closed
    |
    +-- core/llm_client.py     Gemini wrapper: explain_match / answer_followup / extract.
    |       No key -> clearly-labelled "[Local mock mode]" fallback for all three.
@@ -82,8 +86,9 @@ app.py  (Streamlit UI — 2 tabs: Catalog / Upload ad)
    +-- core/ad_reader.py      upload bytes -> Gemini JSON -> Opportunity
    |       tagged source_type="user_uploaded"; file never written to disk
    |
-   +-- core/rag_engine.py     Chroma in-memory; falls back to keyword search on any exception
-   +-- core/i18n.py           flat {key: {en, ur}} dict
+   +-- core/rag_engine.py     keyword by default; opt-in Chroma. Lazy + cached.
+   +-- core/i18n.py           all user-facing prose, both languages, incl.
+                              describe_check() which renders eligibility reasons
 ```
 
 ---
@@ -94,34 +99,34 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 
 | ID | Title | Area | Priority | Status | Owner |
 |---|---|---|---|---|---|
-| BUG-01 | Duplicate widget IDs crash the Upload tab | `app.py` | **P0** | TODO | — |
-| BUG-02 | Upload tab result vanishes on rerun (no session state) | `app.py` | **P0** | TODO | — |
-| DATA-01 | `TODO-VERIFY` placeholder text renders in the live UI | data + `app.py` | **P0** | TODO | — |
+| BUG-01 | Duplicate widget IDs crash the Upload tab | `app.py` | **P0** | **DONE** | — |
+| BUG-02 | Upload tab result vanishes on rerun (no session state) | `app.py` | **P0** | **DONE** | — |
+| DATA-01 | `TODO-VERIFY` placeholder text renders in the live UI | data + `app.py` | **P0** | **DONE** | — |
 | DATA-02 | Verify HEC / PEEF / NAVTTC eligibility figures against source | data | **P0** | TODO | — |
-| BUG-03 | Zero income / zero marks silently become "not provided" | `app.py` | **P1** | TODO | — |
-| BUG-04 | Expired deadline reported as user ineligibility | `rules_engine.py` | **P1** | TODO | — |
-| I18N-01 | `name_ur` / `summary_ur` exist in data but are never displayed | `app.py` | **P1** | TODO | — |
-| I18N-02 | Eligibility reasons are hardcoded English | `rules_engine.py` + `i18n.py` | **P1** | TODO | — |
-| DATA-03 | "Jobs" category is selectable but always returns nothing | data + `app.py` | **P1** | TODO | — |
-| OPS-01 | No error handling around any Gemini call | `llm_client.py` | **P1** | TODO | — |
-| OPS-02 | Confirm model name — `google-generativeai` is **EOL** | `llm_client.py` | **P1** | TODO | — |
-| PERF-01 | First page load ~30–35s: embedding model built at session init | `app.py` + `rag_engine.py` | **P1** | TODO | — |
-| PERF-02 | Model load hits the network despite the local cache (~6s + demo risk) | `rag_engine.py` | **P1** | TODO | — |
-| BUG-05 | Profile selectboxes never seed from the saved profile | `app.py` | **P2** | TODO | — |
-| BUG-06 | Keyword fallback returns arbitrary docs as "evidence" | `rag_engine.py` | **P2** | TODO | — |
-| OPS-04 | Repo is not under version control | repo | **P2** | TODO | — |
-| OPS-05 | Heavy deps will likely break Streamlit Cloud deploy | `requirements.txt` | **P2** | TODO | — |
-| I18N-03 | No RTL layout for Urdu | `app.py` | **P2** | TODO | — |
-| TEST-01 | No tests for data_loader, ad_reader, rag_engine, i18n | `tests/` | **P2** | TODO | — |
-| PERF-03 | Is the vector store worth its cost for a 3-document corpus? | `rag_engine.py` | **P2** | TODO | — |
-| OPS-03 | Bare `except` in the Chroma path hides all failure detail | `rag_engine.py` | **P3** | TODO | — |
-| PERF-04 | No `.streamlit/config.toml` (usage ping, file watcher over `venv/`) | `.streamlit/` | **P3** | TODO | — |
-| BUG-07 | `application_deadline` produces no `n/a` check when absent | `rules_engine.py` | **P3** | TODO | — |
-| BUG-08 | Misleading detail text on the existing-scholarship check | `rules_engine.py` | **P3** | TODO | — |
-| BUG-09 | `st.image(...) if ... else None` used as a statement | `app.py` | **P3** | TODO | — |
-| OPS-06 | `explain_match` sends a raw dataclass repr as the profile summary | `app.py` | **P3** | TODO | — |
-| FEAT-01 | Document-readiness checklist (interactive tick-boxes) | `app.py` | **P3** | TODO | — |
-| FEAT-02 | Export / share a match summary | `app.py` | **P3** | TODO | — |
+| BUG-03 | Zero income / zero marks silently become "not provided" | `app.py` | **P1** | **DONE** | — |
+| BUG-04 | Expired deadline reported as user ineligibility | `rules_engine.py` | **P1** | **DONE** | — |
+| I18N-01 | `name_ur` / `summary_ur` exist in data but are never displayed | `app.py` | **P1** | **DONE** | — |
+| I18N-02 | Eligibility reasons are hardcoded English | `rules_engine.py` + `i18n.py` | **P1** | **DONE** | — |
+| DATA-03 | "Jobs" category is selectable but always returns nothing | data + `app.py` | **P1** | **DONE** | — |
+| OPS-01 | No error handling around any Gemini call | `llm_client.py` | **P1** | **DONE** | — |
+| OPS-02 | Confirm model name against the live API | `llm_client.py` | **P1** | BLOCKED (needs API key) | — |
+| PERF-01 | First page load ~30–35s: embedding model built at session init | `app.py` + `rag_engine.py` | **P1** | **DONE** | — |
+| PERF-02 | Model load hits the network despite the local cache (~6s + demo risk) | `rag_engine.py` | **P1** | **DONE** | — |
+| BUG-05 | Profile selectboxes never seed from the saved profile | `app.py` | **P2** | **DONE** | — |
+| BUG-06 | Keyword fallback returns arbitrary docs as "evidence" | `rag_engine.py` | **P2** | **DONE** | — |
+| OPS-04 | Repo is not under version control | repo | **P2** | **DONE** | — |
+| OPS-05 | Heavy deps will likely break Streamlit Cloud deploy | `requirements.txt` | **P2** | **DONE** | — |
+| I18N-03 | No RTL layout for Urdu | `app.py` | **P2** | **DONE** | — |
+| TEST-01 | No tests for data_loader, ad_reader, rag_engine, i18n | `tests/` | **P2** | **DONE** | — |
+| PERF-03 | Is the vector store worth its cost for a 3-document corpus? | `rag_engine.py` | **P2** | **DONE** | — |
+| OPS-03 | Bare `except` in the Chroma path hides all failure detail | `rag_engine.py` | **P3** | **DONE** | — |
+| PERF-04 | No `.streamlit/config.toml` (usage ping, file watcher over `venv/`) | `.streamlit/` | **P3** | **DONE** | — |
+| BUG-07 | `application_deadline` produces no `n/a` check when absent | `rules_engine.py` | **P3** | **DONE** | — |
+| BUG-08 | Misleading detail text on the existing-scholarship check | `rules_engine.py` | **P3** | **DONE** | — |
+| BUG-09 | `st.image(...) if ... else None` used as a statement | `app.py` | **P3** | **DONE** | — |
+| OPS-06 | `explain_match` sends a raw dataclass repr as the profile summary | `app.py` | **P3** | **DONE** | — |
+| FEAT-01 | Document-readiness checklist (interactive tick-boxes) | `app.py` | **P3** | **DONE** | — |
+| FEAT-02 | Export / share a match summary | `app.py` | **P3** | **DONE** | — |
 | FEAT-03 | Layer 6 — Impact analytics | new | **P3** | DEFERRED | — |
 | FEAT-04 | Persistent on-disk vector store (`scripts/build_vector_store.py`) | `scripts/` | **P3** | DEFERRED | — |
 
@@ -134,7 +139,7 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 ---
 
 #### BUG-01 — Duplicate widget IDs crash the Upload tab
-**Area:** `app.py` · **Priority:** P0 · **Status:** TODO · **Owner:** —
+**Area:** `app.py` · **Priority:** P0 · **Status:** **DONE** · **Owner:** —
 
 **What's wrong**
 `render_profile_form()` is called twice in a single script run: once at `app.py:154` (Catalog tab) and again at `app.py:203` (inside the Upload tab, after "Read this ad" is clicked). Every widget inside it uses **identical parameters and no `key=`**. Streamlit derives element IDs from widget type + parameters, so the second render collides with the first and raises a duplicate-element-ID error.
@@ -156,7 +161,7 @@ Give `render_profile_form()` a `form_id: str` parameter and pass it into every w
 ---
 
 #### BUG-02 — Upload tab result vanishes on rerun
-**Area:** `app.py` · **Priority:** P0 · **Status:** TODO · **Owner:** —
+**Area:** `app.py` · **Priority:** P0 · **Status:** **DONE** · **Owner:** —
 
 **What's wrong**
 The extraction result is computed inside `if st.button(t("upload_ad_button", lang)):` at `app.py:195` and stored only in local variables (`opportunity`, `raw_extracted`). `st.button` returns `True` for exactly one rerun. As soon as the user clicks "See my matches" in the nested profile form, Streamlit reruns the script, the upload button is `False`, and the extraction — plus the match card that depends on it — disappears.
@@ -176,7 +181,7 @@ On button click, write both results into session state (`st.session_state.upload
 ---
 
 #### DATA-01 — `TODO-VERIFY` placeholder text renders in the live UI
-**Area:** `data/opportunities/*.json`, `app.py` · **Priority:** P0 · **Status:** TODO · **Owner:** —
+**Area:** `data/opportunities/*.json`, `app.py` · **Priority:** P0 · **Status:** **DONE** · **Owner:** —
 
 **What's wrong**
 All three curated records carry `"last_verified": "TODO-VERIFY-BEFORE-DEMO"` and `"source_date": "TODO-VERIFY"`. `app.py:126` renders that value directly: the user sees **"Last verified: TODO-VERIFY-BEFORE-DEMO"**.
@@ -234,7 +239,7 @@ For each record: open its `official_url`, confirm the current cycle's actual num
 ---
 
 #### BUG-03 — Zero income / zero marks silently become "not provided"
-**Area:** `app.py:78-86` · **Priority:** P1 · **Status:** TODO · **Owner:** —
+**Area:** `app.py:78-86` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
 
 **What's wrong**
 The profile is built with `age=age or None`, `marks_percentage=marks or None`, `monthly_household_income=income or None`, `years_experience=experience or None`. In Python, `0` and `0.0` are falsy — so a genuine value of zero is converted to `None`, which the rules engine reads as **"unknown"**.
@@ -253,7 +258,7 @@ The real ambiguity is that Streamlit's `number_input` cannot express "unanswered
 ---
 
 #### BUG-04 — Expired deadline reported as user ineligibility
-**Area:** `core/rules_engine.py:174-185` · **Priority:** P1 · **Status:** TODO · **Owner:** —
+**Area:** `core/rules_engine.py:174-185` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
 
 **What's wrong**
 A past `application_deadline` appends a check with status `"unmet"`. The roll-up at `rules_engine.py:189` then makes the whole record **"Likely Not Eligible"**.
@@ -275,7 +280,7 @@ Introduce a separate concept — a record-level `is_stale` / `listing_closed` fl
 ---
 
 #### I18N-01 — `name_ur` / `summary_ur` exist in data but are never displayed
-**Area:** `app.py` · **Priority:** P1 · **Status:** TODO · **Owner:** —
+**Area:** `app.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
 
 **What's wrong**
 Every curated record carries a hand-written `name_ur` and `summary_ur`. `render_match_card()` unconditionally renders `o.name` (`app.py:102`) and `o.summary_en` (`app.py:104`). The Urdu translations are dead data.
@@ -293,7 +298,7 @@ Add a small helper — e.g. `localized(o, "name", lang)` — that returns the `_
 ---
 
 #### I18N-02 — Eligibility reasons are hardcoded English
-**Area:** `core/rules_engine.py`, `core/i18n.py` · **Priority:** P1 · **Status:** TODO · **Owner:** —
+**Area:** `core/rules_engine.py`, `core/i18n.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
 
 **What's wrong**
 Every `ConditionCheck` is built with an English literal for both `label` and `detail` — e.g. `ConditionCheck("Age", "met", f"Required: min {ec.min_age} | You: {profile.age}")`. There are ~10 labels and ~10 detail templates.
@@ -313,7 +318,7 @@ Do **not** put translated strings in the rules engine — that would couple the 
 ---
 
 #### DATA-03 — "Jobs" category is selectable but always returns nothing
-**Area:** `data/opportunities/njp_jobs_sample.json`, `app.py` · **Priority:** P1 · **Status:** TODO · **Owner:** —
+**Area:** `data/opportunities/njp_jobs_sample.json`, `app.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
 
 **What's wrong**
 `njp_jobs_sample.json` contains a single entry whose `name` starts with `REPLACE ME`, which `data_loader.py:31-34` correctly skips. So **zero** job records load. But "💼 Jobs" is offered in the category multiselect and is selected by default. A user who selects only Jobs gets an empty result area — the `st.warning` at `app.py:165` only fires when the *filtered* list is empty, which it is, so they get a generic message with no explanation of why.
@@ -332,7 +337,7 @@ Either (a) complete Step 8 of the README — add 2–3 real currently-open listi
 ---
 
 #### OPS-01 — No error handling around any Gemini call
-**Area:** `core/llm_client.py` · **Priority:** P1 · **Status:** TODO · **Owner:** —
+**Area:** `core/llm_client.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
 
 **What's wrong**
 `explain_match` (line 79), `answer_followup` (line 111), and `extract_opportunity_from_file` (line 175) all call `model.generate_content(...)` with no try/except. A rate limit, network failure, safety block, or malformed response is an uncaught exception surfacing as a Streamlit error page.
@@ -362,21 +367,25 @@ Two separate problems:
 **Why it matters**
 A retired or renamed model means every AI feature fails at once — and with OPS-01 unfixed, it fails loudly. An EOL SDK means no fixes are coming and newer models may simply not be reachable through it.
 
-**Note:** migrating the SDK touches `_client()`, all three `GenerativeModel(...)` call sites, and the multimodal file-part format in `extract_opportunity_from_file`. Decide whether to migrate now or pin-and-ship, and record it in the Decision Log.
+**Done 2026-09-11 (the SDK half):** `core/llm_client.py` now prefers `google-genai` and transparently falls back to the EOL `google-generativeai`, so the app works either way and `pip install google-genai` is the entire migration. The model name is also configurable via a `GEMINI_MODEL` env var or secret, with no code change.
+
+**Still blocked:** confirming the model name against the live API needs an actual key, which does not exist in this environment yet. `DEFAULT_MODEL_NAME` was deliberately left at `gemini-2.0-flash` rather than guessing a newer name that could not be verified.
 
 **Fix approach**
 Check the current model list in Google AI Studio once a key is available, update the constant, and confirm both the text path and the multimodal (image/PDF) path work with the chosen model. Delete the stale comment once resolved.
 
 **Acceptance criteria**
-- [ ] Model name confirmed against the live API.
-- [ ] A real text generation succeeds.
-- [ ] A real image extraction succeeds.
-- [ ] Inline "confirm before building" comment removed.
+- [x] Current SDK supported, EOL SDK kept as a fallback.
+- [x] Model name made configurable without a code change (`GEMINI_MODEL`).
+- [x] Inline "confirm before building" comment removed.
+- [ ] Model name confirmed against the live API. **(needs a key)**
+- [ ] A real text generation succeeds. **(needs a key)**
+- [ ] A real image extraction succeeds. **(needs a key)**
 
 ---
 
 #### PERF-01 — First page load takes ~30–35s because the embedding model is built at session init
-**Area:** `app.py:29-30`, `core/rag_engine.py` · **Priority:** P1 · **Status:** TODO · **Owner:** —
+**Area:** `app.py:29-30`, `core/rag_engine.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
 
 **Measured 2026-09-10** (this machine, warm disk cache, cold process):
 
@@ -414,7 +423,7 @@ Note the last row: rebuilding is cheap *once the model is in the process*. The c
 ---
 
 #### PERF-02 — Model load makes live network calls to Hugging Face despite the local cache
-**Area:** `core/rag_engine.py:49-51` · **Priority:** P1 · **Status:** TODO · **Owner:** —
+**Area:** `core/rag_engine.py:49-51` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
 
 **What's wrong**
 `SentenceTransformerEmbeddingFunction(model_name="paraphrase-multilingual-MiniLM-L12-v2")` contacts the HF Hub on every build to check the model revision, even though the weights are already cached locally. Confirmed by the emitted warning: *"You are sending unauthenticated requests to the HF Hub."*
@@ -435,7 +444,7 @@ Force offline resolution — set `HF_HUB_OFFLINE=1` (and/or `TRANSFORMERS_OFFLIN
 ---
 
 #### PERF-03 — Reconsider whether the vector store is worth its cost at all
-**Area:** `core/rag_engine.py`, `requirements.txt` · **Priority:** P2 · **Status:** TODO · **Owner:** —
+**Area:** `core/rag_engine.py`, `requirements.txt` · **Priority:** P2 · **Status:** **DONE** · **Owner:** —
 
 **The case for dropping it**
 The corpus is **3 documents** (verified in Section 2). Semantic retrieval over 3 short records is close to indistinguishable from keyword matching — `top_k=3` returns essentially the whole corpus either way. For that, the project currently pays: ~24–31s of startup, a PyTorch dependency, a network call (PERF-02), and the Streamlit Cloud deploy risk already tracked as OPS-05.
@@ -455,7 +464,7 @@ The chosen model is *multilingual* — it is what would let an Urdu-language que
 ---
 
 #### PERF-04 — No `.streamlit/config.toml`
-**Area:** `.streamlit/` · **Priority:** P3 · **Status:** TODO · **Owner:** —
+**Area:** `.streamlit/` · **Priority:** P3 · **Status:** **DONE** · **Owner:** —
 
 The folder holds only `secrets.toml.example`. A `config.toml` would let the project turn off the usage-stats ping (`browser.gatherUsageStats = false` — one fewer network call at startup), pin `server.headless`, and tune `server.fileWatcherType` (the default watcher walks the project tree — and `venv/` sits inside this folder, so it may be scanning thousands of dependency files on every rerun).
 
@@ -473,7 +482,7 @@ The folder holds only `secrets.toml.example`. A `config.toml` would let the proj
 ---
 
 #### BUG-05 — Profile selectboxes never seed from the saved profile
-**Area:** `app.py:60-73` · **Priority:** P2 · **Status:** TODO · **Owner:** —
+**Area:** `app.py:60-73` · **Priority:** P2 · **Status:** **DONE** · **Owner:** —
 
 `age` and `marks` seed from `p.age` / `p.marks_percentage`, but `domicile`, `education`, `enrolled`, `existing_scholarship`, and `employment` are all hardcoded `index=0`. Streamlit's own widget-state persistence masks this in normal use, but the inconsistency will bite the moment a profile is restored from anywhere other than the widgets themselves (a saved session, a URL param, a future "edit my profile" flow).
 
@@ -484,7 +493,7 @@ The folder holds only `secrets.toml.example`. A `config.toml` would let the proj
 ---
 
 #### BUG-06 — Keyword fallback returns arbitrary docs as "evidence"
-**Area:** `core/rag_engine.py:81` · **Priority:** P2 · **Status:** TODO · **Owner:** —
+**Area:** `core/rag_engine.py:81` · **Priority:** P2 · **Status:** **DONE** · **Owner:** —
 
 `_keyword_fallback` ends with `... or self._docs[:top_k]` — when no query term matches any document, it returns the first N documents anyway. Those are then passed to `answer_followup` as *evidence* and presented to the model as grounding.
 
@@ -500,7 +509,7 @@ Return an empty list on no match and let the caller show an honest "no relevant 
 ---
 
 #### OPS-03 — Bare `except` in the Chroma path hides all failure detail
-**Area:** `core/rag_engine.py:43-64` · **Priority:** P3 · **Status:** TODO · **Owner:** —
+**Area:** `core/rag_engine.py:43-64` · **Priority:** P3 · **Status:** **DONE** · **Owner:** —
 
 > **Corrected 2026-09-10.** This entry originally claimed that re-adding duplicate IDs on a second session raises, gets swallowed, and silently degrades retrieval to keyword search. **That was tested and is false** — three consecutive `RagIndex` builds in one process all kept `chroma_collection` active with `count() == 3`. ChromaDB 1.5.9 tolerates the duplicate `add()`. Priority dropped P2 → P3 accordingly. The startup cost this entry mentioned in passing turned out to be the real problem and is now tracked separately as **PERF-01**.
 
@@ -516,7 +525,7 @@ Keep the fallback (it is good design), but record why it triggered — log the e
 ---
 
 #### OPS-04 — Repo is not under version control
-**Area:** repo root · **Priority:** P2 · **Status:** TODO · **Owner:** —
+**Area:** repo root · **Priority:** P2 · **Status:** **DONE** · **Owner:** —
 
 `git init` has never been run. There is a well-formed `.gitignore` (correctly excluding `.env`, `.streamlit/secrets.toml`, `venv/`, `chroma_db/`) waiting to be used, and README Step 9 assumes a GitHub repo exists for the Streamlit Cloud deploy.
 
@@ -531,7 +540,7 @@ No history, no rollback, no collaboration, and no deploy path. Every item in thi
 ---
 
 #### OPS-05 — Heavy deps will likely break the Streamlit Cloud deploy
-**Area:** `requirements.txt` · **Priority:** P2 · **Status:** TODO · **Owner:** —
+**Area:** `requirements.txt` · **Priority:** P2 · **Status:** **DONE** · **Owner:** —
 
 `chromadb>=0.5` and `sentence-transformers>=3.0` are active (not commented) in `requirements.txt`. `sentence-transformers` pulls in PyTorch. The README's own troubleshooting table already predicts this will exceed Streamlit Community Cloud's free-tier build resources.
 
@@ -546,7 +555,7 @@ Decide deliberately: either comment both out for the deployed build and accept k
 ---
 
 #### I18N-03 — No RTL layout for Urdu
-**Area:** `app.py` · **Priority:** P2 · **Status:** TODO · **Owner:** —
+**Area:** `app.py` · **Priority:** P2 · **Status:** **DONE** · **Owner:** —
 
 Urdu strings render left-to-right in Streamlit's default layout. Mixed Urdu/English lines (which is most of the UI right now) will read awkwardly.
 
@@ -561,7 +570,7 @@ Inject scoped CSS setting `direction: rtl; text-align: right;` on the main conta
 ---
 
 #### TEST-01 — No tests outside the rules engine
-**Area:** `tests/` · **Priority:** P2 · **Status:** TODO · **Owner:** —
+**Area:** `tests/` · **Priority:** P2 · **Status:** **DONE** · **Owner:** —
 
 `tests/test_rules_engine.py` is genuinely good — 8 focused tests, zero external dependencies, covering eligible / hard-fail / unknown / income / education rank / exclusivity / no-conditions / expired-deadline. But it is the *only* test file. `data_loader`, `ad_reader`, `rag_engine`, `i18n`, and the mock paths in `llm_client` are untested.
 
@@ -584,7 +593,7 @@ Inject scoped CSS setting `direction: rtl; text-align: right;` on the main conta
 ---
 
 #### BUG-07 — No `n/a` check when `application_deadline` is absent
-**Area:** `core/rules_engine.py:174` · **Priority:** P3 · **Status:** TODO · **Owner:** —
+**Area:** `core/rules_engine.py:174` · **Priority:** P3 · **Status:** **DONE** · **Owner:** —
 
 Every other condition appends an explicit `"n/a"` `ConditionCheck` when the opportunity doesn't use it. The deadline branch appends nothing at all when `ec.application_deadline` is `None`. Harmless today (the UI skips `n/a` anyway) but it makes the checks list inconsistent in length and shape, which will surprise anyone writing analytics or tests over it later.
 
@@ -595,7 +604,7 @@ Every other condition appends an explicit `"n/a"` `ConditionCheck` when the oppo
 ---
 
 #### BUG-08 — Misleading detail text on the existing-scholarship check
-**Area:** `core/rules_engine.py:141-145` · **Priority:** P3 · **Status:** TODO · **Owner:** —
+**Area:** `core/rules_engine.py:141-145` · **Priority:** P3 · **Status:** **DONE** · **Owner:** —
 
 The logic is correct (`ok = not (required and has_one)`), but the detail string is always `f"You already receive a scholarship: {profile.has_existing_scholarship}"` — so a user who does *not* have one sees "You already receive a scholarship: False", which reads as a contradiction. Fold this into I18N-02 when the detail strings are restructured.
 
@@ -605,7 +614,7 @@ The logic is correct (`ok = not (required and has_one)`), but the detail string 
 ---
 
 #### BUG-09 — `st.image(...) if ... else None` used as a statement
-**Area:** `app.py:193` · **Priority:** P3 · **Status:** TODO · **Owner:** —
+**Area:** `app.py:193` · **Priority:** P3 · **Status:** **DONE** · **Owner:** —
 
 A conditional expression evaluated purely for its side effect. It works, but it's the kind of line that makes a reviewer stop. Replace with a plain `if mime_type.startswith("image/"): st.image(...)`.
 
@@ -615,7 +624,7 @@ A conditional expression evaluated purely for its side effect. It works, but it'
 ---
 
 #### OPS-06 — `explain_match` sends a raw dataclass repr as the profile summary
-**Area:** `app.py:131` · **Priority:** P3 · **Status:** TODO · **Owner:** —
+**Area:** `app.py:131` · **Priority:** P3 · **Status:** **DONE** · **Owner:** —
 
 `profile_summary = str(st.session_state.profile)` sends `UserProfile(age=20, domicile_province='Punjab', ...)` to the model. It works, and it is **privacy-safe** (the model has no PII fields by design — see Section 6), but a natural-language summary would produce noticeably better explanations, and it's a one-function change.
 
@@ -627,7 +636,7 @@ A conditional expression evaluated purely for its side effect. It works, but it'
 ---
 
 #### FEAT-01 — Document-readiness checklist
-**Area:** `app.py` · **Priority:** P3 · **Status:** TODO · **Owner:** —
+**Area:** `app.py` · **Priority:** P3 · **Status:** **DONE** · **Owner:** —
 
 `i18n.py:50` already defines `document_checklist_heading` in both languages, but nothing uses it. `required_documents` renders as a static bullet list. Making it interactive tick-boxes (with state) turns a passive list into an actionable prep tool.
 
@@ -641,7 +650,7 @@ A conditional expression evaluated purely for its side effect. It works, but it'
 ---
 
 #### FEAT-02 — Export / share a match summary
-**Area:** `app.py` · **Priority:** P3 · **Status:** TODO · **Owner:** —
+**Area:** `app.py` · **Priority:** P3 · **Status:** **DONE** · **Owner:** —
 
 Let a user download or copy a summary of their matches, required documents, and application steps. Must carry the same disclaimers and the same curated-vs-uploaded trust distinction as the on-screen version — a stripped-down export that loses the "AI-read, verify against the original" badge would be a real regression.
 
@@ -663,26 +672,26 @@ Deliberately deferred per the original plan (README Section 5) as the first thin
 
 Phases, not deadlines. Each phase should leave the app in a demonstrable state.
 
-**Phase 0 — Make it safe to work (do this first)**
+**Phase 0 — Make it safe to work** ✅ DONE
 `OPS-04` (git init) — everything below is safer with version control underneath it.
 
-**Phase 1 — Stop the bleeding**
+**Phase 1 — Stop the bleeding** ✅ DONE
 `BUG-01` → `BUG-02` (upload tab works at all) → `DATA-01` (nothing embarrassing on screen).
 *Exit criteria: every visible path through the app either works or is honestly labelled as unavailable.*
 
-**Phase 1.5 — Make it fast (cheap, high-visibility, do it early)**
+**Phase 1.5 — Make it fast** ✅ DONE — first render 1.07s
 `PERF-01` (lazy + cached index) → `PERF-02` (offline model load).
 *Exit criteria: `streamlit run` to an interactive form in under ~5s, with wifi disabled.*
 
-**Phase 2 — Truth**
+**Phase 2 — Truth** ⚠️ PARTIAL — `DATA-02` (verify the real numbers) is the one blocker left; it needs a human with the official sources
 `DATA-02` (verify the numbers) → `DATA-03` (jobs: fill or flag) → `OPS-02` (model name) → `OPS-01` (Gemini error handling).
 *Exit criteria: nothing shown to a user is unverified or capable of crashing the page.*
 
-**Phase 3 — Deliver the bilingual promise**
+**Phase 3 — Deliver the bilingual promise** ✅ DONE
 `I18N-01` → `I18N-02` → `I18N-03`.
 *Exit criteria: an Urdu-first user gets a genuinely Urdu experience, including the reasons.*
 
-**Phase 4 — Correctness of the core**
+**Phase 4 — Correctness of the core** ✅ DONE
 `BUG-03` (zero values) → `BUG-04` (stale vs ineligible) → `TEST-01` (lock it all in).
 *Exit criteria: the rules engine's output is trustworthy at the edges, and tests prevent regression.*
 
@@ -714,10 +723,12 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | Date | Decision | Rationale | Made by |
 |---|---|---|---|
 | 2026-09-10 | Tracker created as `PROJECT_TRACKER.md` in the repo root | Work tracking lives beside the code and under version control, separate from `README.md`'s setup role | — |
-| — | *(pending: BUG-04 — how to represent a closed/stale listing)* | — | — |
-| — | *(pending: DATA-03 — fill real job listings, or mark Jobs "Coming Soon")* | — | — |
-| — | *(pending: OPS-05 / PERF-03 — ship with Chroma, or with keyword fallback)* | — | — |
-| — | *(pending: OPS-02 — migrate to `google.genai` now, or pin the EOL SDK and ship)* | — | — |
+| 2026-09-11 | **BUG-04** — a closed listing is a separate `MatchResult.listing_closed` flag, not a fourth status | Keeps the three profile statuses purely about the profile. A qualified person against an expired listing now reads "Likely Eligible" + "Applications closed", which is the truth | Claude |
+| 2026-09-11 | **DATA-03** — empty categories are derived from the data and shown disabled as "Coming soon" | Automatic and self-correcting: the moment real job records land, Jobs switches on with no code change. Honest rather than a blank result set | Claude |
+| 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
+| 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
+| 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-11 | Eligibility reasons moved to `i18n.describe_check()` | Translating inside the rules engine would have coupled the decision layer to presentation. The engine now emits keys + structured values and stays language-free and independently testable | Claude |
 
 ---
 
@@ -731,6 +742,22 @@ Append one line per completed piece of work.
 | 2026-09-10 | PERF-01..04 | Startup performance profiled; four PERF items added. No code changed. |
 | 2026-09-10 | OPS-03 | **Corrected** — the duplicate-ID/silent-degradation claim was tested and disproved. Rewritten and dropped P2 → P3. |
 | 2026-09-10 | OPS-02 | Expanded — `google-generativeai` 0.8.6 found to be **end-of-life**, not just possibly-stale on model name. |
+| 2026-09-11 | OPS-04 | Repo initialised and pushed to GitHub by the user; tracker committed. |
+| 2026-09-11 | — | Branch `feature/ux-overhaul-and-fixes` opened off `main`. |
+| 2026-09-11 | *landing page* | `app.py` rebuilt: sidebar (language, live AI status, catalogue health), hero with trust chips, and three tabs — Find / Read an ad / How it works. Numbered 3-step flow, grouped results with KPI row, styled status + trust badges, condition list, interactive document checklist. |
+| 2026-09-11 | BUG-01, BUG-02 | Upload tab fixed: one shared profile form (no duplicate widget IDs), extraction persisted in session state with an explicit Clear control. |
+| 2026-09-11 | BUG-03 | `number_input(value=None)` replaces `x or None`; zero income / zero experience now screen as real answers. |
+| 2026-09-11 | BUG-04 | Closed listings separated from user ineligibility via `MatchResult.listing_closed`. |
+| 2026-09-11 | BUG-05..09 | Form seeding, keyword-evidence honesty, deadline `n/a`, scholarship wording, `st.image` statement. |
+| 2026-09-11 | DATA-01 | `Opportunity.is_verified()` guards the UI; a `TODO-VERIFY` string can no longer render as a date. |
+| 2026-09-11 | DATA-03 | Category availability derived from loaded data; empty categories shown disabled as "Coming soon". |
+| 2026-09-11 | I18N-01..03 | Urdu record fields now displayed; all eligibility reasons translated via `describe_check()`; RTL layout for Urdu. |
+| 2026-09-11 | OPS-01, OPS-02 | Every Gemini call wrapped with graceful degradation; dual-SDK support (`google-genai` preferred, EOL SDK as fallback). |
+| 2026-09-11 | OPS-03, OPS-06 | Fallback reason recorded and exposed via `RagIndex.mode`; prose profile summary replaces the dataclass repr. |
+| 2026-09-11 | PERF-01..04 | Lazy + `@st.cache_resource` retrieval, offline model loading, opt-in semantic search, `.streamlit/config.toml`. **First render measured at 1.07s** (was ~30-35s), with no heavy modules imported at page load. |
+| 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
+| 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
+| 2026-09-11 | *(found & fixed)* | Streamlit rejects an `int` seed on a float `number_input` — a profile holding `75` rather than `75.0` crashed the form. Added `_as_float`/`_as_int` coercion. |
 
 ---
 

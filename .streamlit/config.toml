@@ -1,0 +1,23 @@
+# Streamlit runtime configuration (PROJECT_TRACKER.md PERF-04).
+# Safe to commit - this file holds no secrets. Real secrets go in
+# .streamlit/secrets.toml, which .gitignore excludes.
+
+[browser]
+# One fewer network call on startup, and no usage telemetry from demo machines.
+gatherUsageStats = false
+
+[server]
+# The virtualenv lives inside this project folder, so the default file watcher
+# would walk thousands of dependency files on every rerun. Watch only our code.
+folderWatchList = ["app.py", "core", "tests", "data"]
+fileWatcherType = "auto"
+
+[theme]
+base = "light"
+primaryColor = "#0f6b4f"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f6f5"
+textColor = "#1c2321"
+
+[client]
+showErrorDetails = true
