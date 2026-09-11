@@ -20,7 +20,14 @@
     "employment_status_required": "any",
     "special_quota_note": "Unemployed applicants and applicants from under-developed/rural areas are typically given preference, but employment status is not a hard disqualifier for most courses - check the specific course listing.",
     "min_experience_years": null,
-    "application_deadline": null
+    "application_deadline": null,
+    "gender_required": null,
+    "min_english_level": null,
+    "min_computer_skills": null,
+    "fields_of_study": null,
+    "priority_groups": [
+      "under_served_district"
+    ]
   },
   "required_documents": [
     "CNIC (or Form-B for applicants without a full CNIC yet)",

@@ -19,7 +19,8 @@ from core.models import (
     MET, UNMET, UNKNOWN, NOT_APPLICABLE,
     CHECK_AGE, CHECK_DOMICILE, CHECK_EDUCATION, CHECK_MARKS, CHECK_INCOME,
     CHECK_ENROLLMENT, CHECK_EXISTING_SCHOLARSHIP, CHECK_EMPLOYMENT,
-    CHECK_EXPERIENCE, CHECK_DEADLINE,
+    CHECK_EXPERIENCE, CHECK_DEADLINE, CHECK_GENDER, CHECK_ENGLISH,
+    CHECK_COMPUTER, CHECK_FIELD_OF_STUDY,
 )
 
 STRINGS: Dict[str, Dict[str, str]] = {
@@ -314,6 +315,125 @@ STRINGS: Dict[str, Dict[str, str]] = {
     },
     "how_privacy_heading": {"en": "What we never collect", "ur": "ہم کیا کبھی جمع نہیں کرتے"},
 
+
+    # -- wizard -------------------------------------------------------------
+    "step_focus_title": {"en": "What are you looking for?", "ur": "آپ کیا تلاش کر رہے ہیں؟"},
+    "step_focus_caption": {
+        "en": "Choose one or more categories. We will only screen you against these.",
+        "ur": "ایک یا زیادہ زمرے منتخب کریں۔ ہم صرف انہی کے مطابق جانچ کریں گے۔",
+    },
+    "step_about_title": {"en": "About you", "ur": "آپ کے بارے میں"},
+    "step_about_caption": {
+        "en": "Basic details that almost every programme screens on.",
+        "ur": "بنیادی تفصیلات جو تقریباً ہر پروگرام میں درکار ہوتی ہیں۔",
+    },
+    "step_education_title": {"en": "Education", "ur": "تعلیم"},
+    "step_education_caption": {
+        "en": "Your highest completed level, and how you performed.",
+        "ur": "آپ کی مکمل کردہ اعلیٰ ترین سطح اور کارکردگی۔",
+    },
+    "step_circumstances_title": {"en": "Skills and circumstances", "ur": "مہارتیں اور حالات"},
+    "step_circumstances_caption": {
+        "en": "Optional, but each answer sharpens your results and may unlock programmes with reserved places.",
+        "ur": "اختیاری، لیکن ہر جواب آپ کے نتائج کو بہتر بناتا ہے اور مخصوص نشستوں والے پروگرام کھول سکتا ہے۔",
+    },
+    "step_results_title": {"en": "Your results", "ur": "آپ کے نتائج"},
+    "step_results_caption": {
+        "en": "Screened against every programme in the categories you chose.",
+        "ur": "منتخب کردہ زمروں کے تمام پروگراموں کے مطابق جانچ کی گئی۔",
+    },
+    "nav_back": {"en": "Back", "ur": "واپس"},
+    "nav_continue": {"en": "Continue", "ur": "جاری رکھیں"},
+    "nav_see_results": {"en": "See my results", "ur": "نتائج دیکھیں"},
+    "nav_start_over": {"en": "Start over", "ur": "دوبارہ شروع کریں"},
+    "nav_edit_answers": {"en": "Edit my answers", "ur": "جوابات میں ترمیم کریں"},
+    "step_counter": {"en": "Step {current} of {total}", "ur": "مرحلہ {current} از {total}"},
+    "required_marker": {"en": "Required", "ur": "لازمی"},
+    "optional_marker": {"en": "Optional", "ur": "اختیاری"},
+    "fix_before_continuing": {
+        "en": "Please complete the highlighted fields before continuing.",
+        "ur": "جاری رکھنے سے پہلے براہ کرم نشان زد خانے مکمل کریں۔",
+    },
+    "your_answers": {"en": "Your answers", "ur": "آپ کے جوابات"},
+    "detail_completeness": {"en": "{percent}% of optional detail provided",
+                            "ur": "{percent}% اختیاری تفصیلات فراہم کی گئیں"},
+    "more_detail_hint": {
+        "en": "Answering more questions turns \"Needs verification\" results into clear ones.",
+        "ur": "مزید سوالات کے جواب دینے سے \"تصدیق درکار\" کے نتائج واضح ہو جاتے ہیں۔",
+    },
+
+    # -- validation ---------------------------------------------------------
+    "err_required": {"en": "This answer is needed to screen you.",
+                     "ur": "جانچ کے لیے یہ جواب ضروری ہے۔"},
+    "err_age_range": {"en": "Enter an age between {min} and {max}.",
+                      "ur": "{min} سے {max} کے درمیان عمر درج کریں۔"},
+    "err_marks_range": {"en": "Marks must be between 0 and 100.",
+                        "ur": "نمبر 0 سے 100 کے درمیان ہونے چاہئیں۔"},
+    "err_income_range": {"en": "Enter a monthly amount in rupees.",
+                         "ur": "ماہانہ رقم روپوں میں درج کریں۔"},
+    "err_experience_range": {"en": "Enter years between 0 and 50.",
+                             "ur": "0 سے 50 کے درمیان سال درج کریں۔"},
+    "err_no_category": {"en": "Choose at least one category.",
+                        "ur": "کم از کم ایک زمرہ منتخب کریں۔"},
+    "err_invalid_choice": {"en": "Choose one of the listed options.",
+                           "ur": "دی گئی فہرست میں سے ایک منتخب کریں۔"},
+
+    # -- new profile fields -------------------------------------------------
+    "field_gender": {"en": "Gender", "ur": "جنس"},
+    "field_gender_help": {
+        "en": "Asked only because some programmes reserve places for women.",
+        "ur": "صرف اس لیے پوچھا گیا کہ بعض پروگراموں میں خواتین کے لیے نشستیں مخصوص ہیں۔",
+    },
+    "gender_female": {"en": "Female", "ur": "خاتون"},
+    "gender_male": {"en": "Male", "ur": "مرد"},
+    "gender_other": {"en": "Prefer to self-describe", "ur": "خود بیان کرنا چاہوں گا/گی"},
+    "field_field_of_study": {"en": "Field of study", "ur": "شعبہ تعلیم"},
+    "fos_engineering": {"en": "Engineering", "ur": "انجینئرنگ"},
+    "fos_computer_science": {"en": "Computer Science / IT", "ur": "کمپیوٹر سائنس / آئی ٹی"},
+    "fos_medical": {"en": "Medical & Health", "ur": "طب و صحت"},
+    "fos_natural_sciences": {"en": "Natural Sciences", "ur": "طبیعی علوم"},
+    "fos_social_sciences": {"en": "Social Sciences", "ur": "سماجی علوم"},
+    "fos_business": {"en": "Business & Commerce", "ur": "کاروبار و تجارت"},
+    "fos_arts_humanities": {"en": "Arts & Humanities", "ur": "فنون و علومِ انسانی"},
+    "fos_education": {"en": "Education", "ur": "تعلیم"},
+    "fos_agriculture": {"en": "Agriculture", "ur": "زراعت"},
+    "fos_law": {"en": "Law", "ur": "قانون"},
+    "fos_other": {"en": "Other", "ur": "دیگر"},
+    "field_english_level": {"en": "English proficiency", "ur": "انگریزی کی استعداد"},
+    "eng_none": {"en": "None", "ur": "کوئی نہیں"},
+    "eng_basic": {"en": "Basic — simple words and phrases", "ur": "بنیادی — سادہ الفاظ اور جملے"},
+    "eng_intermediate": {"en": "Intermediate — can hold a conversation",
+                         "ur": "درمیانی — گفتگو کر سکتے ہیں"},
+    "eng_fluent": {"en": "Fluent — comfortable reading and writing",
+                   "ur": "روانی — پڑھنے لکھنے میں مکمل مہارت"},
+    "field_computer_skills": {"en": "Computer & digital skills", "ur": "کمپیوٹر اور ڈیجیٹل مہارت"},
+    "comp_none": {"en": "None", "ur": "کوئی نہیں"},
+    "comp_basic": {"en": "Basic — email, browsing, typing", "ur": "بنیادی — ای میل، براؤزنگ، ٹائپنگ"},
+    "comp_intermediate": {"en": "Intermediate — office software, spreadsheets",
+                          "ur": "درمیانی — آفس سافٹ ویئر، اسپریڈ شیٹ"},
+    "comp_advanced": {"en": "Advanced — programming, design, data",
+                      "ur": "اعلیٰ — پروگرامنگ، ڈیزائن، ڈیٹا"},
+    "field_has_disability": {"en": "Do you have a disability?", "ur": "کیا آپ کو کوئی معذوری ہے؟"},
+    "field_is_orphan": {"en": "Are you an orphan?", "ur": "کیا آپ یتیم ہیں؟"},
+    "special_circumstances": {"en": "Special circumstances", "ur": "خصوصی حالات"},
+    "special_circumstances_help": {
+        "en": "Several programmes reserve places for these groups. Answering can only help you — it is never used to exclude anyone.",
+        "ur": "کئی پروگراموں میں ان گروہوں کے لیے نشستیں مخصوص ہیں۔ جواب دینا صرف فائدہ دے سکتا ہے — اسے کبھی خارج کرنے کے لیے استعمال نہیں کیا جاتا۔",
+    },
+
+    # -- priority groups ----------------------------------------------------
+    "priority_heading": {"en": "You may qualify for a reserved place",
+                         "ur": "آپ مخصوص نشست کے اہل ہو سکتے ہیں"},
+    "priority_body": {
+        "en": "This programme gives priority to: {groups}. Confirm the current quota rules with the official source.",
+        "ur": "یہ پروگرام ان کو ترجیح دیتا ہے: {groups}۔ موجودہ کوٹہ قواعد کی تصدیق سرکاری ذریعے سے کریں۔",
+    },
+    "pg_female": {"en": "women applicants", "ur": "خواتین امیدوار"},
+    "pg_disability": {"en": "applicants with a disability", "ur": "معذور امیدوار"},
+    "pg_orphan": {"en": "orphaned applicants", "ur": "یتیم امیدوار"},
+    "pg_minority": {"en": "religious minorities", "ur": "مذہبی اقلیتیں"},
+    "pg_under_served_district": {"en": "under-served districts", "ur": "پسماندہ اضلاع"},
+
     # -- export -------------------------------------------------------------
     "export_heading": {"en": "Save your results", "ur": "اپنے نتائج محفوظ کریں"},
     "export_button": {"en": "Download summary (.txt)", "ur": "خلاصہ ڈاؤن لوڈ کریں"},
@@ -361,14 +481,38 @@ _STATUS_KEYS = {
 
 _PROFILE_FIELD_KEYS = {
     "age": "field_age",
+    "gender": "field_gender",
     "domicile_province": "field_domicile",
     "education_level": "field_education",
     "marks_percentage": "field_marks",
+    "field_of_study": "field_field_of_study",
     "monthly_household_income": "field_income",
     "currently_enrolled": "field_enrolled",
     "has_existing_scholarship": "field_existing_scholarship",
+    "english_level": "field_english_level",
+    "computer_skills": "field_computer_skills",
     "employment_status": "field_employment",
     "years_experience": "field_experience",
+    "has_disability": "field_has_disability",
+    "is_orphan": "field_is_orphan",
+    "categories": "select_category",
+}
+
+_ENGLISH_KEYS = {level: "eng_" + level
+                 for level in ("none", "basic", "intermediate", "fluent")}
+_COMPUTER_KEYS = {level: "comp_" + level
+                  for level in ("none", "basic", "intermediate", "advanced")}
+_GENDER_KEYS = {g: "gender_" + g for g in ("female", "male", "other")}
+_FIELD_OF_STUDY_KEYS = {
+    f: "fos_" + f for f in (
+        "engineering", "computer_science", "medical", "natural_sciences",
+        "social_sciences", "business", "arts_humanities", "education",
+        "agriculture", "law", "other",
+    )
+}
+_PRIORITY_GROUP_KEYS = {
+    g: "pg_" + g for g in
+    ("female", "disability", "orphan", "minority", "under_served_district")
 }
 
 
@@ -384,6 +528,58 @@ def education_label(level: Optional[str], lang: str = "en") -> str:
     if not level:
         return "—"
     return t(_EDUCATION_KEYS.get(str(level).lower(), str(level)), lang)
+
+
+def _short(label: str) -> str:
+    """First clause only - dropdown labels carry an explanation, checks don't."""
+    for sep in (" — ", " - "):
+        if sep in label:
+            return label.split(sep, 1)[0]
+    return label
+
+
+def english_label(level: Optional[str], lang: str = "en", short: bool = False) -> str:
+    if not level:
+        return "\u2014"
+    label = t(_ENGLISH_KEYS.get(str(level).lower(), str(level)), lang)
+    return _short(label) if short else label
+
+
+def computer_label(level: Optional[str], lang: str = "en", short: bool = False) -> str:
+    if not level:
+        return "\u2014"
+    label = t(_COMPUTER_KEYS.get(str(level).lower(), str(level)), lang)
+    return _short(label) if short else label
+
+
+def gender_label(value: Optional[str], lang: str = "en") -> str:
+    if not value:
+        return "\u2014"
+    return t(_GENDER_KEYS.get(str(value).lower(), str(value)), lang)
+
+
+def field_of_study_label(value: Optional[str], lang: str = "en") -> str:
+    if not value:
+        return "\u2014"
+    return t(_FIELD_OF_STUDY_KEYS.get(str(value).lower(), str(value)), lang)
+
+
+def priority_group_label(value: str, lang: str = "en") -> str:
+    return t(_PRIORITY_GROUP_KEYS.get(str(value).lower(), str(value)), lang)
+
+
+def join_list(values, lang: str = "en") -> str:
+    """Join with the correct separator for the language."""
+    values = [v for v in values if v]
+    return ("\u060c ".join(values)) if lang == "ur" else (", ".join(values))
+
+
+def validation_message(error_code: str, lang: str = "en") -> str:
+    """Render a core.validation error code (I18N-02: codes in, prose out)."""
+    from core.validation import AGE_MIN, AGE_MAX
+    if error_code == "age_range":
+        return t("err_age_range", lang, min=AGE_MIN, max=AGE_MAX)
+    return t("err_" + error_code, lang)
 
 
 def _yes_no(value: Optional[bool], lang: str) -> str:
@@ -452,6 +648,10 @@ _CHECK_TITLES = {
     CHECK_EMPLOYMENT: {"en": "Employment status", "ur": "ملازمت کی صورتحال"},
     CHECK_EXPERIENCE: {"en": "Work experience", "ur": "کام کا تجربہ"},
     CHECK_DEADLINE: {"en": "Application deadline", "ur": "درخواست کی آخری تاریخ"},
+    CHECK_GENDER: {"en": "Gender requirement", "ur": "جنس کی شرط"},
+    CHECK_ENGLISH: {"en": "English proficiency", "ur": "انگریزی کی استعداد"},
+    CHECK_COMPUTER: {"en": "Computer skills", "ur": "کمپیوٹر مہارت"},
+    CHECK_FIELD_OF_STUDY: {"en": "Field of study", "ur": "شعبہ تعلیم"},
 }
 
 _REQUIRED_WORD = {"en": "Required", "ur": "درکار"}
@@ -518,7 +718,19 @@ def _requirement_text(check: ConditionCheck, lang: str) -> str:
     if key == CHECK_EXPERIENCE:
         return f"{_w(_AT_LEAST, lang)} {_years(req, lang)}"
 
-    return "—" if req is None else str(req)
+    if key == CHECK_GENDER:
+        return gender_label(req, lang)
+
+    if key == CHECK_ENGLISH:
+        return f"{_w(_AT_LEAST, lang)} {english_label(req, lang, short=True)}"
+
+    if key == CHECK_COMPUTER:
+        return f"{_w(_AT_LEAST, lang)} {computer_label(req, lang, short=True)}"
+
+    if key == CHECK_FIELD_OF_STUDY and isinstance(req, list):
+        return join_list([field_of_study_label(f, lang) for f in req], lang)
+
+    return "\u2014" if req is None else str(req)
 
 
 def _actual_text(check: ConditionCheck, lang: str) -> str:
@@ -542,6 +754,14 @@ def _actual_text(check: ConditionCheck, lang: str) -> str:
         return _employment_label(actual, lang)
     if key == CHECK_EXPERIENCE:
         return _years(actual, lang)
+    if key == CHECK_GENDER:
+        return gender_label(actual, lang)
+    if key == CHECK_ENGLISH:
+        return english_label(actual, lang, short=True)
+    if key == CHECK_COMPUTER:
+        return computer_label(actual, lang, short=True)
+    if key == CHECK_FIELD_OF_STUDY:
+        return field_of_study_label(actual, lang)
     return str(actual)
 
 
@@ -586,8 +806,13 @@ def describe_profile(profile, lang: str = "en") -> str:
         parts.append(f"{t('field_domicile', lang)}: {profile.domicile_province}")
     if profile.education_level:
         parts.append(f"{t('field_education', lang)}: {education_label(profile.education_level, lang)}")
+    if profile.gender:
+        parts.append(f"{t('field_gender', lang)}: {gender_label(profile.gender, lang)}")
     if profile.marks_percentage is not None:
         parts.append(f"{t('field_marks', lang)}: {_percent(profile.marks_percentage)}")
+    if profile.field_of_study:
+        parts.append(f"{t('field_field_of_study', lang)}: "
+                     f"{field_of_study_label(profile.field_of_study, lang)}")
     if profile.monthly_household_income is not None:
         parts.append(f"{t('field_income', lang)}: {_money(profile.monthly_household_income, lang)}")
     if profile.currently_enrolled is not None:
@@ -600,13 +825,24 @@ def describe_profile(profile, lang: str = "en") -> str:
                      f"{_employment_label(profile.employment_status, lang)}")
     if profile.years_experience is not None:
         parts.append(f"{t('field_experience', lang)}: {_years(profile.years_experience, lang)}")
+    if profile.english_level:
+        parts.append(f"{t('field_english_level', lang)}: "
+                     f"{english_label(profile.english_level, lang)}")
+    if profile.computer_skills:
+        parts.append(f"{t('field_computer_skills', lang)}: "
+                     f"{computer_label(profile.computer_skills, lang)}")
+    if profile.has_disability is not None:
+        parts.append(f"{t('field_has_disability', lang)}: "
+                     f"{_yes_no(profile.has_disability, lang)}")
+    if profile.is_orphan is not None:
+        parts.append(f"{t('field_is_orphan', lang)}: {_yes_no(profile.is_orphan, lang)}")
 
     if not parts:
         return t("placeholder_not_answered", lang)
 
     # Explicitly name what was left blank, so the model doesn't fill the gap.
     unanswered = [profile_field_label(f, lang) for f in _PROFILE_FIELD_KEYS
-                  if not profile.is_field_known(f)]
+                  if f != "categories" and not profile.is_field_known(f)]
     summary = "; ".join(parts)
     if unanswered:
         label = "Not provided" if lang != "ur" else "فراہم نہیں کیا گیا"

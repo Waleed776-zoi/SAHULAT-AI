@@ -39,19 +39,33 @@ from core.models import (
     MET, UNMET, UNKNOWN, NOT_APPLICABLE,
     CHECK_AGE, CHECK_DOMICILE, CHECK_EDUCATION, CHECK_MARKS, CHECK_INCOME,
     CHECK_ENROLLMENT, CHECK_EXISTING_SCHOLARSHIP, CHECK_EMPLOYMENT,
-    CHECK_EXPERIENCE, CHECK_DEADLINE,
+    CHECK_EXPERIENCE, CHECK_DEADLINE, CHECK_GENDER, CHECK_ENGLISH,
+    CHECK_COMPUTER, CHECK_FIELD_OF_STUDY,
+    EDUCATION_RANK, ENGLISH_RANK, COMPUTER_RANK, rank_in,
 )
-
-EDUCATION_RANK = {
-    "matric": 1,
-    "intermediate": 2,
-    "bachelor": 3,
-    "master": 4,
-}
 
 
 def _rank(level: str) -> int:
-    return EDUCATION_RANK.get((level or "").lower(), 0)
+    return EDUCATION_RANK.get((level or "").strip().lower(), 0)
+
+
+def _ranked_check(key, required_level, actual_level, rank_table,
+                  checks, missing, missing_field_name):
+    """
+    Shared 'at least this level' comparison for the ordered vocabularies
+    (English, computer skills). Note that the string "none" is a real answer
+    meaning the user has none of that skill - only Python None is unanswered.
+    """
+    if not required_level:
+        checks.append(ConditionCheck(key, NOT_APPLICABLE))
+        return
+    if actual_level is None:
+        checks.append(ConditionCheck(key, UNKNOWN, required=required_level))
+        missing.append(missing_field_name)
+        return
+    ok = rank_in(rank_table, actual_level) >= rank_in(rank_table, required_level)
+    checks.append(ConditionCheck(key, MET if ok else UNMET,
+                                 required=required_level, actual=actual_level))
 
 
 def _outcome(ok: bool) -> str:
@@ -215,6 +229,40 @@ def evaluate(profile: UserProfile, opportunity: Opportunity,
             actual=profile.years_experience,
         ))
 
+    # --- gender (real women-only / men-only programmes) ---
+    if not ec.gender_required or ec.gender_required == "any":
+        checks.append(ConditionCheck(CHECK_GENDER, NOT_APPLICABLE))
+    elif not profile.gender:
+        checks.append(ConditionCheck(CHECK_GENDER, UNKNOWN, required=ec.gender_required))
+        missing.append("gender")
+    else:
+        ok = profile.gender.strip().lower() == ec.gender_required.strip().lower()
+        checks.append(ConditionCheck(CHECK_GENDER, _outcome(ok),
+                                     required=ec.gender_required, actual=profile.gender))
+
+    # --- English proficiency ---
+    _ranked_check(CHECK_ENGLISH, ec.min_english_level, profile.english_level,
+                  ENGLISH_RANK, checks, missing, "english_level")
+
+    # --- computer / digital skills ---
+    _ranked_check(CHECK_COMPUTER, ec.min_computer_skills, profile.computer_skills,
+                  COMPUTER_RANK, checks, missing, "computer_skills")
+
+    # --- field of study ---
+    if not ec.fields_of_study:
+        checks.append(ConditionCheck(CHECK_FIELD_OF_STUDY, NOT_APPLICABLE))
+    elif not profile.field_of_study:
+        checks.append(ConditionCheck(CHECK_FIELD_OF_STUDY, UNKNOWN,
+                                     required=list(ec.fields_of_study)))
+        missing.append("field_of_study")
+    else:
+        ok = profile.field_of_study.strip().lower() in [
+            f.strip().lower() for f in ec.fields_of_study
+        ]
+        checks.append(ConditionCheck(CHECK_FIELD_OF_STUDY, _outcome(ok),
+                                     required=list(ec.fields_of_study),
+                                     actual=profile.field_of_study))
+
     # --- roll up the PROFILE-BASED status (deadline excluded on purpose) ---
     statuses = [c.status for c in checks]
     if UNMET in statuses:
@@ -245,6 +293,16 @@ def evaluate(profile: UserProfile, opportunity: Opportunity,
             checks.append(ConditionCheck(CHECK_DEADLINE, MET,
                                          required=deadline_value, actual=today.isoformat()))
 
+    # --- priority groups -------------------------------------------------
+    # An ADVANTAGE, never a gate: belonging to one of these can help an
+    # application, but not belonging to one never excludes anybody. These come
+    # from the record's explicit `priority_groups` list - they are never
+    # inferred from free-text prose.
+    matched_groups = []
+    if ec.priority_groups:
+        stated = {g.strip().lower() for g in ec.priority_groups}
+        matched_groups = [g for g in profile.priority_group_memberships() if g in stated]
+
     return MatchResult(
         opportunity=opportunity,
         overall_status=overall,
@@ -252,6 +310,7 @@ def evaluate(profile: UserProfile, opportunity: Opportunity,
         missing_profile_fields=missing,
         listing_closed=listing_closed,
         deadline=deadline_value,
+        matched_priority_groups=matched_groups,
     )
 
 
@@ -270,9 +329,11 @@ def evaluate_all(profile: UserProfile, opportunities: List[Opportunity],
     results = [evaluate(profile, o, today=today) for o in opportunities]
     results.sort(key=lambda r: (
         _RANK_ORDER.get(r.overall_status, 3),
-        r.listing_closed,                 # open before closed
-        -r.count(MET),                    # more satisfied conditions first
-        r.opportunity.name.lower(),       # stable, predictable tie-break
+        r.listing_closed,                     # open before closed
+        -len(r.matched_priority_groups),      # priority-group matches first
+        -r.confidence_ratio(),                # more confirmed conditions first
+        -r.count(MET),
+        r.opportunity.name.lower(),           # stable, predictable tie-break
     ))
     return results
 

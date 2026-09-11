@@ -23,10 +23,19 @@
         "employment_status_required": null,
         "special_quota_note": null,
         "min_experience_years": null,
-        "application_deadline": "REPLACE ME: YYYY-MM-DD, must be a FUTURE date at demo time"
+        "application_deadline": "REPLACE ME: YYYY-MM-DD, must be a FUTURE date at demo time",
+        "gender_required": null,
+        "min_english_level": null,
+        "min_computer_skills": null,
+        "fields_of_study": null,
+        "priority_groups": null
       },
-      "required_documents": ["REPLACE ME: from the actual ad"],
-      "application_steps": ["REPLACE ME: from the actual ad"],
+      "required_documents": [
+        "REPLACE ME: from the actual ad"
+      ],
+      "application_steps": [
+        "REPLACE ME: from the actual ad"
+      ],
       "official_url": "https://njp.gov.pk/",
       "source_title": "National Jobs Portal listing",
       "source_date": "REPLACE ME: date you captured this listing",

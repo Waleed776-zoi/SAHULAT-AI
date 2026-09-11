@@ -13,7 +13,8 @@ import unittest
 from datetime import date
 
 from core.models import (
-    CHECK_DEADLINE, CHECK_EXISTING_SCHOLARSHIP, CHECK_INCOME, CHECK_EXPERIENCE,
+    CHECK_COMPUTER, CHECK_DEADLINE, CHECK_ENGLISH, CHECK_EXISTING_SCHOLARSHIP,
+    CHECK_EXPERIENCE, CHECK_FIELD_OF_STUDY, CHECK_GENDER, CHECK_INCOME,
     EligibilityConditions, MET, NOT_APPLICABLE, Opportunity,
     STATUS_ELIGIBLE, STATUS_NEEDS_VERIFICATION, STATUS_NOT_ELIGIBLE,
     UNKNOWN, UNMET, UserProfile,
@@ -216,6 +217,98 @@ class TestEvaluateAll(unittest.TestCase):
         self.assertEqual(totals["total"], 2)
         self.assertEqual(totals[STATUS_ELIGIBLE], 1)
         self.assertEqual(totals[STATUS_NOT_ELIGIBLE], 1)
+
+
+class TestNewEligibilityGates(unittest.TestCase):
+    """Gates added 2026-09-11 for finer shortlisting."""
+
+    def test_gender_gate(self):
+        opp = make_opportunity(gender_required="female")
+        self.assertEqual(evaluate(UserProfile(gender="female"), opp).overall_status,
+                         STATUS_ELIGIBLE)
+        self.assertEqual(evaluate(UserProfile(gender="male"), opp).overall_status,
+                         STATUS_NOT_ELIGIBLE)
+
+    def test_gender_any_is_not_a_gate(self):
+        opp = make_opportunity(gender_required="any")
+        result = evaluate(UserProfile(), opp)
+        self.assertEqual(find(result, CHECK_GENDER).status, NOT_APPLICABLE)
+
+    def test_unanswered_gender_is_unknown_not_excluded(self):
+        opp = make_opportunity(gender_required="female")
+        result = evaluate(UserProfile(), opp)
+        self.assertEqual(find(result, CHECK_GENDER).status, UNKNOWN)
+        self.assertEqual(result.overall_status, STATUS_NEEDS_VERIFICATION)
+
+    def test_english_level_is_ranked(self):
+        opp = make_opportunity(min_english_level="intermediate")
+        for level, expected in (("none", UNMET), ("basic", UNMET),
+                                ("intermediate", MET), ("fluent", MET)):
+            with self.subTest(level=level):
+                result = evaluate(UserProfile(english_level=level), opp)
+                self.assertEqual(find(result, CHECK_ENGLISH).status, expected)
+
+    def test_english_none_is_an_answer_not_a_blank(self):
+        """"none" means 'I have no English' - it must screen, not read as unknown."""
+        opp = make_opportunity(min_english_level="basic")
+        result = evaluate(UserProfile(english_level="none"), opp)
+        self.assertEqual(find(result, CHECK_ENGLISH).status, UNMET)
+        self.assertNotIn("english_level", result.missing_profile_fields)
+
+    def test_computer_skills_are_ranked(self):
+        opp = make_opportunity(min_computer_skills="intermediate")
+        self.assertEqual(
+            find(evaluate(UserProfile(computer_skills="advanced"), opp),
+                 CHECK_COMPUTER).status, MET)
+        self.assertEqual(
+            find(evaluate(UserProfile(computer_skills="basic"), opp),
+                 CHECK_COMPUTER).status, UNMET)
+
+    def test_field_of_study_membership(self):
+        opp = make_opportunity(fields_of_study=["engineering", "computer_science"])
+        self.assertEqual(
+            find(evaluate(UserProfile(field_of_study="engineering"), opp),
+                 CHECK_FIELD_OF_STUDY).status, MET)
+        self.assertEqual(
+            find(evaluate(UserProfile(field_of_study="law"), opp),
+                 CHECK_FIELD_OF_STUDY).status, UNMET)
+
+    def test_new_gates_are_na_when_unused(self):
+        result = evaluate(UserProfile(), make_opportunity())
+        for key in (CHECK_GENDER, CHECK_ENGLISH, CHECK_COMPUTER, CHECK_FIELD_OF_STUDY):
+            with self.subTest(key=key):
+                self.assertEqual(find(result, key).status, NOT_APPLICABLE)
+
+
+class TestPriorityGroupsAreAdvantagesOnly(unittest.TestCase):
+    """Priority groups must never exclude anyone."""
+
+    def test_matching_group_is_reported(self):
+        opp = make_opportunity(priority_groups=["female", "orphan"])
+        result = evaluate(UserProfile(gender="female"), opp)
+        self.assertEqual(result.matched_priority_groups, ["female"])
+
+    def test_not_matching_does_not_reduce_eligibility(self):
+        opp = make_opportunity(priority_groups=["orphan"])
+        result = evaluate(UserProfile(gender="male", is_orphan=False), opp)
+        self.assertEqual(result.matched_priority_groups, [])
+        self.assertEqual(result.overall_status, STATUS_ELIGIBLE)
+
+    def test_priority_groups_add_no_conditions(self):
+        with_groups = evaluate(UserProfile(), make_opportunity(priority_groups=["female"]))
+        without = evaluate(UserProfile(), make_opportunity())
+        self.assertEqual(len(with_groups.checks), len(without.checks))
+
+    def test_disability_and_orphan_are_detected(self):
+        opp = make_opportunity(priority_groups=["disability", "orphan", "minority"])
+        result = evaluate(UserProfile(has_disability=True, is_orphan=True), opp)
+        self.assertEqual(set(result.matched_priority_groups), {"disability", "orphan"})
+
+    def test_priority_matches_rank_higher(self):
+        plain = make_opportunity(name="A plain")
+        priority = make_opportunity(name="B priority", priority_groups=["female"])
+        results = evaluate_all(UserProfile(gender="female"), [plain, priority])
+        self.assertEqual(results[0].opportunity.name, "B priority")
 
 
 if __name__ == "__main__":

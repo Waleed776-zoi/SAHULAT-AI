@@ -4,7 +4,7 @@
 Companion to `README.md` (which is the *setup* guide). This file is the *work* guide.
 
 - **Created:** 2026-09-10
-- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: landing page rebuilt, 26 items closed, 73 tests passing
+- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: guided wizard, design system, richer screening fields. 31 items closed, 110 tests passing
 - **Baseline audited:** full read of all 10 source files, 5 data files, config, and a live environment verification run.
 
 ---
@@ -54,12 +54,12 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **73/73 pass** — `Ran 73 tests in 0.044s / OK` |
+| Unit tests | **110/110 pass** — `Ran 110 tests in 0.053s / OK` |
 | Data loader | Loads **3** opportunities: `hec_balochistan_fata_ug` (scholarship), `navttc_hunarmand_pakistan` (skills), `peef_punjab_undergraduate` (scholarship) |
 | Job records loaded | **0** — all `njp_jobs_sample.json` entries are `REPLACE ME` placeholders and are correctly skipped by the loader |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
 | Embedding model | `paraphrase-multilingual-MiniLM-L12-v2` cached locally, but semantic search is now **opt-in** (`SAHULAT_SEMANTIC_SEARCH=1`); keyword search is the default |
-| First render | **1.07s**, with no torch/sentence-transformers/chromadb imported at page load (was ~30–35s) |
+| First render | **1.16s**, with no torch/sentence-transformers/chromadb imported at page load (was ~30–35s) |
 | Gemini API key | **Not configured.** No `.env`, no `.streamlit/secrets.toml`. App runs in labelled mock mode. |
 | `scripts/` | Empty directory (consistent with README — `build_vector_store.py` was never written) |
 | Git | Repo live at `github.com/Waleed776-zoi/SAHULAT-AI`; work branched on `feature/ux-overhaul-and-fixes` |
@@ -110,6 +110,11 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | DATA-03 | "Jobs" category is selectable but always returns nothing | data + `app.py` | **P1** | **DONE** | — |
 | OPS-01 | No error handling around any Gemini call | `llm_client.py` | **P1** | **DONE** | — |
 | OPS-02 | Confirm model name against the live API | `llm_client.py` | **P1** | BLOCKED (needs API key) | — |
+| UX-01 | Enter key submitted a half-filled form straight to results | `app.py` | **P0** | **DONE** | — |
+| UX-02 | Decorative emoji throughout made the UI look unserious | `app.py` + `i18n.py` | **P1** | **DONE** | — |
+| UX-03 | No design system: abstract layout, default typography | `app.py` | **P1** | **DONE** | — |
+| FEAT-05 | Too few screening fields to shortlist usefully | core + data | **P1** | **DONE** | — |
+| FEAT-06 | Priority groups (reserved places) surfaced as advantages | core + `app.py` | **P2** | **DONE** | — |
 | PERF-01 | First page load ~30–35s: embedding model built at session init | `app.py` + `rag_engine.py` | **P1** | **DONE** | — |
 | PERF-02 | Model load hits the network despite the local cache (~6s + demo risk) | `rag_engine.py` | **P1** | **DONE** | — |
 | BUG-05 | Profile selectboxes never seed from the saved profile | `app.py` | **P2** | **DONE** | — |
@@ -381,6 +386,135 @@ Check the current model list in Google AI Studio once a key is available, update
 - [ ] Model name confirmed against the live API. **(needs a key)**
 - [ ] A real text generation succeeds. **(needs a key)**
 - [ ] A real image extraction succeeds. **(needs a key)**
+
+---
+
+#### UX-01 — Enter key submitted a half-filled form straight to results
+**Area:** `app.py`, `core/validation.py` · **Priority:** P0 · **Status:** **DONE** · **Owner:** —
+
+**What was wrong**
+The profile lived in a single `st.form`. Streamlit submits a form when Enter is
+pressed in any input, so typing an age and hitting Enter jumped straight to
+results with nothing else answered — and every condition came back "unknown".
+There was also no concept of a required field.
+
+**What was done**
+Replaced the single form with a **guided four-step wizard**, and deliberately
+did **not** use `st.form` anywhere — a form's Enter-to-submit behaviour is the
+bug. Steps: Focus → About you → Education → Skills & circumstances → Results.
+
+Step rules live in `core/validation.py`, not in the UI, so they are unit-tested
+without Streamlit:
+- `age` and `domicile_province` are required to leave step 2; `education_level`
+  to leave step 3; at least one category to leave step 1.
+- Ranges are enforced (age 14–70, marks 0–100, experience 0–50).
+- Everything else stays genuinely optional — an unanswered field still becomes
+  "unknown" rather than a guess, which is the original architecture's promise.
+- Errors render inline under the offending field, in both languages.
+
+**Acceptance criteria**
+- [x] No `st.form` in the app (verified: 0 forms rendered).
+- [x] Enter cannot advance a step or reach results.
+- [x] Each step blocks until its required fields hold sensible values.
+- [x] Validation is unit-tested independently of Streamlit (24 tests).
+
+---
+
+#### UX-02 — Decorative emoji throughout
+**Area:** `app.py`, `core/i18n.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
+
+Emoji were used for category icons, tab labels, status dots, buttons, badges and
+callouts. On a government-services tool this reads as unserious.
+
+All decorative emoji were removed — from the UI, the tab labels, the i18n
+strings and the page icon. Meaning is now carried by typography, colour and
+layout. The only remaining glyphs are `✓` and `✕` in the condition rows and
+completed-step markers: these are typographic dingbats, not colour emoji, and
+they carry real semantic weight (met / unmet).
+
+**Acceptance criteria**
+- [x] No emoji in any rendered string (audited programmatically).
+- [x] Status still legible without them, via colour and label.
+
+---
+
+#### UX-03 — No design system
+**Area:** `app.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
+
+The page used default Streamlit typography and an ad-hoc gradient hero, so it
+read as generic and visually unresolved.
+
+Introduced a small, explicit design system:
+- **Typography.** *Source Serif 4* for display headings (institutional, and it
+  gives the wordmark some authority), *Inter* for UI text. Urdu switches to
+  *Noto Nastaliq Urdu* for display and *Noto Naskh Arabic* for body, with a
+  taller line-height because Nastaliq needs the room.
+- **Colour tokens.** A single `:root` palette — brand green, ink/muted/line
+  neutrals, and semantic ok/warn/no tints — instead of scattered hex values.
+- **Components.** Masthead, stepper, panel, field tag, badge, condition row,
+  callout, KPI tile, answer summary.
+- **Restraint.** The loud gradient hero became a bordered masthead with a rule
+  of assurances; cards use hairline borders rather than heavy shadows.
+
+**Acceptance criteria**
+- [x] Fonts load and apply in both languages.
+- [x] One token palette; no ad-hoc colours in components.
+- [x] Urdu keeps RTL layout with the new type stack.
+
+---
+
+#### FEAT-05 — Richer screening fields
+**Area:** `core/models.py`, `core/rules_engine.py`, `core/i18n.py`, data · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
+
+Six fields were added to `UserProfile`, each because a real Pakistani programme
+screens or reserves places on it: `gender`, `field_of_study`, `english_level`,
+`computer_skills`, `has_disability`, `is_orphan`.
+
+Four became real eligibility **gates** in the rules engine, with their own
+condition keys and bilingual rendering: `gender_required`, `min_english_level`,
+`min_computer_skills`, `fields_of_study`. English and computer skills are
+ranked vocabularies, so "at least intermediate" is a simple comparison.
+
+**A note on `"none"`:** for English and computer skills, `"none"` is a real
+answered value meaning *I have none of this*, and is distinct from Python `None`
+meaning *not answered*. The first screens; the second stays "unknown".
+
+Privacy is unchanged — every new field is an attribute, never an identifier
+(Invariant 2). Gender carries an explicit note in the UI saying why it is asked.
+
+**Important:** every new gate is `null` in all curated records. Inventing
+thresholds would violate Invariant 6. They exist for the data work in DATA-02.
+
+**Acceptance criteria**
+- [x] Fields added to the model, wizard, engine, i18n and export.
+- [x] All new gates null in curated data; schema.json documents them.
+- [x] 13 new rules-engine tests.
+
+---
+
+#### FEAT-06 — Priority groups surfaced as advantages
+**Area:** `core/models.py`, `core/rules_engine.py`, `app.py` · **Priority:** P2 · **Status:** **DONE** · **Owner:** —
+
+Several records already described reserved places in prose — HEC notes female
+and under-served-district priority, PEEF notes orphans, minorities and disabled
+students. That was invisible to the engine.
+
+Added `priority_groups` to `EligibilityConditions` and
+`matched_priority_groups` to `MatchResult`. When a profile belongs to a group a
+programme prioritises, the result card says so.
+
+**These are advantages, never gates.** Not belonging to a priority group can
+never exclude anyone, and priority groups add no conditions to the check list —
+both are asserted by tests. They also rank matching records slightly higher.
+
+The values populated are a faithful transcription of what each record's own
+`special_quota_note` already stated. Nothing new was asserted about any
+programme, and they are never inferred from prose at runtime.
+
+**Acceptance criteria**
+- [x] Advantage only — cannot reduce eligibility (tested).
+- [x] Adds no conditions to the check list (tested).
+- [x] Values transcribed from existing notes, not invented.
 
 ---
 
@@ -728,6 +862,9 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-11 | **UX-01** — a step wizard with no `st.form` anywhere | A form submits on Enter, which was the reported bug. Explicit Back/Continue buttons make progression deliberate, and validation lives in a testable module rather than the UI | Claude |
+| 2026-09-11 | **UX-01** — only age, domicile and education are required | These three change almost every result, so leaving them blank makes the whole screen read "needs verification". Income and the sensitive fields stay optional, preserving the "never guess, never pressure" stance | Claude |
+| 2026-09-11 | **FEAT-06** — priority groups are advantages, never gates | A reserved place helps those inside the group; it must never exclude those outside it. Encoded as data transcribed from each record's own note, never inferred from prose | Claude |
 | 2026-09-11 | Eligibility reasons moved to `i18n.describe_check()` | Translating inside the rules engine would have coupled the decision layer to presentation. The engine now emits keys + structured values and stays language-free and independently testable | Claude |
 
 ---
@@ -757,6 +894,12 @@ Append one line per completed piece of work.
 | 2026-09-11 | PERF-01..04 | Lazy + `@st.cache_resource` retrieval, offline model loading, opt-in semantic search, `.streamlit/config.toml`. **First render measured at 1.07s** (was ~30-35s), with no heavy modules imported at page load. |
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
+| 2026-09-11 | UX-01 | Single `st.form` replaced by a validated four-step wizard; Enter can no longer submit a half-filled profile. Step rules extracted to `core/validation.py`. |
+| 2026-09-11 | UX-02 | All decorative emoji removed; only the `✓` / `✕` condition dingbats remain. |
+| 2026-09-11 | UX-03 | Design system added: Source Serif 4 + Inter (Nastaliq + Naskh for Urdu), one colour-token palette, and a component set (masthead, stepper, panel, badge, callout, KPI, answer summary). |
+| 2026-09-11 | FEAT-05 | Six screening fields added (gender, field of study, English, computer skills, disability, orphan); four new rules-engine gates, all null in curated data. |
+| 2026-09-11 | FEAT-06 | `priority_groups` surfaced as advantages, transcribed from each record's existing quota note. |
+| 2026-09-11 | TEST-01 | Suite grown 73 → **110 tests** (validation: 24, new gates: 13). |
 | 2026-09-11 | *(found & fixed)* | Streamlit rejects an `int` seed on a float `number_input` — a profile holding `75` rather than `75.0` crashed the form. Added `_as_float`/`_as_int` coercion. |
 
 ---
