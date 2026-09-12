@@ -355,6 +355,9 @@ class TestExtractionIsReadable(unittest.TestCase):
         self.app = AppTest.from_file(APP, default_timeout=180)
         self.app.session_state["uploaded_opportunity"] = opportunity
         self.app.session_state["uploaded_raw"] = raw
+        # The Lens lives on its own screen now, so a test that seeds an upload
+        # has to be standing on it - which is where a real user would be.
+        self.app.session_state["section"] = "read"
         self.app.run()
         self.body = " ".join(str(m.value) for m in self.app.markdown)
 
@@ -454,6 +457,9 @@ class TestCorrectingAMisreadExtraction(unittest.TestCase):
         self.app = AppTest.from_file(APP, default_timeout=240)
         self.app.session_state["uploaded_opportunity"] = self.record
         self.app.session_state["uploaded_raw"] = raw
+        # The Lens lives on its own screen now, so a test that seeds an upload
+        # has to be standing on it - which is where a real user would be.
+        self.app.session_state["section"] = "read"
         self.app.session_state["answers"] = {
             "age": 21, "domicile_province": "Punjab",
             "education_level": "intermediate", "marks_percentage": 72.0}

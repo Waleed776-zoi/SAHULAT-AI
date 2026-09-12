@@ -48,7 +48,8 @@ from core.llm_client import (
 )
 from core.models import (
     COMPUTER_LEVELS, EDUCATION_LEVELS, ENGLISH_LEVELS, FIELDS_OF_STUDY, GENDERS,
-    LISTING_ALWAYS_OPEN, LISTING_CLOSED, LISTING_OPEN, MET, PROVINCES, STATUS_ELIGIBLE,
+    CHECK_DEADLINE, LISTING_ALWAYS_OPEN, LISTING_CLOSED, LISTING_OPEN, MET,
+    PROVINCES, STATUS_ELIGIBLE,
     STATUS_NEEDS_VERIFICATION, STATUS_NOT_ELIGIBLE, UNKNOWN, UNMET, UserProfile,
     sample_profile,
 )
@@ -160,10 +161,9 @@ def inject_css(lang: str) -> None:
     rtl = """
       .stMain .block-container { direction: rtl; text-align: right; }
       .sa-checkrow, .sa-stepper, .sa-inline-trust,
-      .sahulat-header-inner, .sahulat-logo { flex-direction: row-reverse; }
+      .sa-brandbar, .sahulat-logo { flex-direction: row-reverse; }
       a[href^="http"], .sa-ltr { direction: ltr; unicode-bidi: embed;
                                  display: inline-block; }
-      .sahulat-nav a::after { left: auto; right: 0; }
     """ if urdu else ""
 
     st.markdown(
@@ -255,6 +255,154 @@ def callout(body: str, title: str = "", tone: str = "") -> None:
     title_html = f'<span class="sa-callout-title">{title}</span>' if title else ""
     st.markdown(f'<div class="sa-callout {tone}">{title_html}{body}</div>',
                 unsafe_allow_html=True)
+
+
+# One card is shown for this long before the next slides in. Slow on purpose:
+# the hero is read, not watched, and a faster cycle would pull attention away
+# from the headline and the call to action beside it.
+PREVIEW_SECONDS_PER_CARD = 4.0
+
+
+def hero_preview_card(match, lang: str) -> str:
+    """One real screening result, rendered at preview size."""
+    opportunity = match.opportunity
+    score = match.scorecard()
+
+    category = (t(f"category_{opportunity.category}", lang)
+                if opportunity.category in KNOWN_CATEGORIES else opportunity.category)
+    deadline_label, _ = describe_urgency(match_urgency(match),
+                                         days_remaining(match.deadline), lang)
+
+    # Real condition rows, drawn from the checks the engine actually ran.
+    # The deadline is excluded: it is a property of the listing rather than of
+    # the person, it already has its own line above, and rendering it as
+    # "your information: today's date" reads as nonsense at this size.
+    rows = ""
+    for check in [c for c in match.satisfied() + match.gaps() + match.blockers()
+                  if c.key != CHECK_DEADLINE][:3]:
+        title, _required, actual, outcome = scorecard_row(check, lang)
+        tone = {MET: "is-met", UNMET: "is-unmet"}.get(check.status, "is-unknown")
+        rows += (f'<div class="sa-preview-row">'
+                 f'<span class="sa-preview-req">{title}</span>'
+                 f'<span class="sa-preview-you">{actual}</span>'
+                 f'<span class="sa-preview-mark {tone}">{outcome}</span></div>')
+
+    action = describe_next_action(next_action(match, set()), lang)
+
+    return (
+        f'<div class="sa-preview-body">'
+        f'<div class="sa-preview-eyebrow">{category}'
+        f'<span class="sa-preview-pill">{status_label(match.overall_status, lang)}</span>'
+        f'</div>'
+        f'<div class="sa-preview-title">{opportunity.display_name(lang)}</div>'
+        f'<div class="sa-preview-org">{opportunity.provider}</div>'
+        f'<div class="sa-preview-score">'
+        f'<span class="sa-preview-count">'
+        f'{t("scorecard_summary", lang, met=score["met"], total=score["total"])}</span>'
+        f'<span class="sa-preview-deadline">{deadline_label}</span></div>'
+        f'{rows}'
+        f'<div class="sa-preview-next">'
+        f'<span class="sa-preview-next-label">{t("next_step_label", lang)}</span>'
+        f'<span class="sa-preview-next-body">{action}</span></div>'
+        f'</div>'
+    )
+
+
+def hero_preview_matches():
+    """
+    The best real match in each category, for the rotation.
+
+    Not the overall top six - for the demo profile that is five NAVTTC courses,
+    which is accurate and would imply the catalogue holds nothing else. One per
+    category shows the whole product, and each card is still whatever the
+    engine actually ranks first in its own category.
+    """
+    results = evaluate_all(sample_profile(), get_opportunities())
+    picks = []
+    for category in KNOWN_CATEGORIES:
+        best = top_matches([r for r in results
+                            if r.opportunity.category == category], limit=1)
+        if best:
+            picks.append(best[0])
+    return picks or top_matches(results, limit=1)
+
+
+def preview_cycle_css(count: int, seconds_each: float) -> str:
+    """
+    Keyframes for the rotation, generated because the percentages depend on
+    how many categories actually have records.
+
+    Each card holds still for most of its window and moves only at the
+    handover, so what the reader sees is a settled card rather than a
+    permanently animating one (V3 spec 40.5).
+    """
+    if count < 2:
+        return ""
+    total = count * seconds_each
+    share = 100.0 / count           # this card's slice of the whole cycle
+    enter = min(3.0, share / 6)     # slide in
+    leave = share - enter           # start sliding out
+    return (
+        "<style>"
+        "@keyframes sa-preview-cycle {"
+        f"0%{{opacity:0;transform:translateY(14px) scale(.985)}}"
+        f"{enter:.2f}%{{opacity:1;transform:none}}"
+        f"{leave:.2f}%{{opacity:1;transform:none}}"
+        f"{share:.2f}%{{opacity:0;transform:translateY(-14px) scale(.985)}}"
+        f"100%{{opacity:0;transform:translateY(-14px) scale(.985)}}"
+        "}"
+        "@keyframes sa-preview-dot {"
+        f"0%,{share:.2f}%,100%{{background:var(--border-hover);opacity:.45}}"
+        f"{enter:.2f}%,{leave:.2f}%{{background:var(--primary);opacity:1}}"
+        "}"
+        f".sa-preview-slide{{animation:sa-preview-cycle {total:.1f}s"
+        " var(--sa-ease-cycle, linear) infinite both}"
+        f".sa-preview-dots i{{animation:sa-preview-dot {total:.1f}s linear infinite both}}"
+        "</style>"
+    )
+
+
+@st.cache_data(show_spinner=False)
+def hero_preview(lang: str) -> str:
+    """
+    A miniature of real results, for the hero (spec 13.2).
+
+    NOT a mockup. Every card is a screening of the demo profile against the
+    live catalogue - the same verdict, the same condition count, the same next
+    step a user would get. A fabricated example card would be the one dishonest
+    thing on the landing page of a product that exists to not fabricate things.
+
+    The cards cycle in CSS rather than through reruns. A rerun every four
+    seconds would re-screen the catalogue and reset every widget on the page,
+    and Streamlit has no way to repaint one element on a timer without one.
+
+    Cached per language: it costs one screening pass, and the landing page is
+    the most re-rendered screen in the app.
+    """
+    matches = hero_preview_matches()
+    if not matches:
+        return ""
+
+    slides = "".join(
+        f'<div class="sa-preview-slide" style="animation-delay:'
+        f'{index * PREVIEW_SECONDS_PER_CARD:.1f}s">{hero_preview_card(match, lang)}</div>'
+        for index, match in enumerate(matches))
+
+    dots = ""
+    if len(matches) > 1:
+        dots = ('<div class="sa-preview-dots" aria-hidden="true">' + "".join(
+            f'<i style="animation-delay:{index * PREVIEW_SECONDS_PER_CARD:.1f}s"></i>'
+            for index in range(len(matches))) + "</div>")
+
+    return (
+        preview_cycle_css(len(matches), PREVIEW_SECONDS_PER_CARD)
+        + f'<div class="sa-preview" role="img" '
+          f'aria-label="{t("hero_preview_alt", lang)}">'
+          f'<div class="sa-preview-chrome"><span></span><span></span><span></span>'
+          f'{dots}</div>'
+          f'<div class="sa-preview-stack">{slides}</div>'
+          f'</div>'
+    )
 
 
 def opportunity_map_svg(lang: str) -> str:
@@ -361,6 +509,9 @@ def sahulat_path_vertical(lang: str) -> str:
 def init_state() -> None:
     defaults = {
         "language": "en",
+        # Which product screen is on. "view" is a level below: home vs wizard
+        # WITHIN Discover.
+        "section": "discover",
         "view": "home",
         "answers": {},
         "categories": [c for c in KNOWN_CATEGORIES],
@@ -398,10 +549,25 @@ def record(field_name: str, value) -> None:
     st.session_state.answers[field_name] = value
 
 
+# The three product screens. Not tabs: each is a destination with its own
+# purpose, and the header treats them as such (spec 45.3).
+SECTIONS = ("discover", "read", "how")
+SECTION_LABEL_KEYS = {"discover": "nav_discover", "read": "nav_read",
+                      "how": "nav_how"}
+
+
+def go_to_section(name: str) -> None:
+    st.session_state.section = name
+    st.rerun()
+
+
 def go_to(index: int) -> None:
     st.session_state.step = max(0, min(index, RESULTS_STEP_INDEX))
     st.session_state.step_errors = {}
     st.session_state.view = "wizard"
+    # Every wizard step lives on Discover. Jumping to a step from elsewhere -
+    # the Lens hand-off does this - has to bring the section with it.
+    st.session_state.section = "discover"
     st.rerun()
 
 
@@ -413,6 +579,7 @@ def start_over() -> None:
     st.session_state.step = 0
     st.session_state.step_errors = {}
     st.session_state.view = "home"
+    st.session_state.section = "discover"
     st.session_state.documents_ready = {}
     st.session_state.simplified = {}
     # Per-opportunity Q&A answers are keyed dynamically (P1-3), so clear them
@@ -447,47 +614,87 @@ LOGO_MARK = (
 )
 
 
-def render_header() -> None:
-    """A distinct navigation layer, not another white block (spec 4)."""
-    st.markdown(
-        f'<div class="sahulat-header"><div class="sahulat-header-inner">'
-        f'<div class="sahulat-logo">{LOGO_MARK}'
-        f'<span class="sahulat-logo-name">{t("app_title", lang)}</span>'
-        f'<span class="sahulat-logo-sep">·</span>'
-        f'<span class="sahulat-logo-ur">{t("brand_urdu", lang)}</span></div>'
-        f'<nav class="sahulat-nav">'
-        f'<a href="#discover">{t("nav_discover", lang)}</a>'
-        f'<a href="#how">{t("nav_how", lang)}</a>'
-        f'<a href="#privacy">{t("privacy_heading", lang)}</a>'
-        f'</nav></div></div>',
-        unsafe_allow_html=True,
+def render_language_picker() -> None:
+    """
+    One dropdown rather than three buttons.
+
+    Each option is written in its own language, so a reader who cannot read
+    the other two can still find theirs - that was the reason the buttons were
+    always visible, and it survives the move into a menu because the labels
+    themselves carry it.
+    """
+    codes = list(LANGUAGES)
+    chosen = st.selectbox(
+        t("footer_language", lang), codes,
+        index=codes.index(lang) if lang in codes else 0,
+        format_func=lambda code: LANGUAGE_NAMES[code],
+        key="lang_picker", label_visibility="collapsed",
+        help=t("language_help", lang),
     )
+    if chosen != lang:
+        st.session_state.language = chosen
+        st.rerun()
+
+
+def render_header() -> None:
+    """
+    The brand bar: identity on one side, language on the other.
+
+    A real columns row rather than one HTML block, because a Streamlit widget
+    cannot be nested inside a markdown string and the language picker has to
+    live in here. `.sa-brandbar` is the hook the stylesheet matches on.
+    """
+    brand, picker = st.columns([3.4, 1], vertical_alignment="center")
+    with brand:
+        st.markdown(
+            f'<div class="sa-brandbar">{LOGO_MARK}'
+            f'<span class="sahulat-logo-name">{t("app_title", lang)}</span>'
+            f'<span class="sahulat-logo-sep">·</span>'
+            f'<span class="sahulat-logo-ur">{t("brand_urdu", lang)}</span></div>',
+            unsafe_allow_html=True,
+        )
+    with picker:
+        render_language_picker()
+
+
+def render_nav_bar() -> None:
+    """
+    The three product screens and the primary action.
+
+    Replaces `st.tabs`. A tab strip says "panels of one page"; these are
+    different screens with different jobs, and the header is where a product
+    puts them. The active item is the only `primary` button on the bar, which
+    is what carries the current-location signal - never colour alone.
+
+    Language used to sit here as three buttons. It is a setting, touched once,
+    and it was taking three of the eight slots on the row that carries the
+    navigation - so it moved into the brand bar as a picker.
+    """
+    st.markdown('<div class="sa-navbar">', unsafe_allow_html=True)
+    columns = st.columns([1.2, 1.85, 1.6, 1.5, 1.85], vertical_alignment="center")
+
+    for column, name in zip(columns[:3], SECTIONS):
+        with column:
+            active = st.session_state.section == name
+            if st.button(t(SECTION_LABEL_KEYS[name], lang), key=f"section_{name}",
+                         use_container_width=True,
+                         type="primary" if active else "tertiary"):
+                go_to_section(name)
+
+    with columns[4]:
+        if st.session_state.section == "discover" and st.session_state.view == "home":
+            if st.button(t("cta_start", lang), key="header_cta",
+                         type="primary", use_container_width=True):
+                go_to(0)
+        else:
+            if st.button(t("nav_start_over", lang), key="header_restart",
+                         use_container_width=True):
+                start_over()
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 render_header()
-
-# Three language modes (P2-1). Each button is labelled in its own mode, so a
-# reader who cannot read the other two can still find theirs.
-LANGUAGE_BUTTONS = {"en": "EN", "ur": "اردو", "ur_roman": "Roman"}
-
-_, lang_col_a, lang_col_b, lang_col_c, cta_col = st.columns([3, 1, 1, 1, 2])
-for column, code in zip((lang_col_a, lang_col_b, lang_col_c), LANGUAGES):
-    with column:
-        if st.button(LANGUAGE_BUTTONS[code], key=f"lang_{code}",
-                     use_container_width=True,
-                     help=LANGUAGE_NAMES[code],
-                     type="primary" if lang == code else "secondary"):
-            st.session_state.language = code
-            st.rerun()
-with cta_col:
-    if st.session_state.view == "home":
-        if st.button(t("cta_start", lang), key="header_cta",
-                     type="primary", use_container_width=True):
-            go_to(0)
-    else:
-        if st.button(t("nav_start_over", lang), key="header_restart",
-                     use_container_width=True):
-            start_over()
+render_nav_bar()
 
 
 # ---------------------------------------------------------------------------
@@ -549,7 +756,11 @@ def render_home() -> None:
             unsafe_allow_html=True,
         )
     with hero_visual:
-        st.markdown(opportunity_map_svg(lang), unsafe_allow_html=True)
+        # A real screening result, not an illustration of one (spec 13.2).
+        preview = hero_preview(lang)
+        st.markdown(preview or opportunity_map_svg(lang), unsafe_allow_html=True)
+        if preview:
+            st.caption(t("hero_preview_note", lang))
 
     # -- four clear paths, including the upload route (V2 P0-8) ------------
     # The fourth path is not a category: it is the Lens. Leaving it out of the
@@ -579,7 +790,12 @@ def render_home() -> None:
         with st.container(border=True):
             st.markdown(f"**{t('path_check_ad', lang)}**")
             st.caption(t("path_check_ad_body", lang))
-            st.caption(t("home_upload_hint", lang))
+            # The other four cards start a journey; this one used to just point
+            # at a tab. Now that the tab is a screen, it can do the same thing
+            # they do (spec 50: one dominant action per card).
+            if st.button(t("path_start", lang), key="path_check_ad",
+                         use_container_width=True):
+                go_to_section("read")
 
     # -- what can you find --
     section_label(t("find_heading", lang))
@@ -1141,9 +1357,11 @@ def render_plain_language(opportunity) -> None:
     """
     key = f"eli5_{opportunity.opportunity_id}"
     if st.button(t("eli5_button", lang), key=f"btn_{key}"):
-        with st.spinner(""):
-            st.session_state.simplified[key] = simplify_opportunity(
-                opportunity_facts(opportunity), lang)
+        with ai_stages("stage_simplify_read", "stage_simplify_write") as stages:
+            facts = opportunity_facts(opportunity)
+            stages.advance()
+
+            st.session_state.simplified[key] = simplify_opportunity(facts, lang)
 
     result = st.session_state.simplified.get(key)
     if not result:
@@ -1208,9 +1426,15 @@ def render_contextual_followup(match) -> None:
         with column:
             if st.button(t(chip, lang), key=f"{chip}_{opportunity.opportunity_id}",
                          use_container_width=True):
-                evidence = get_rag_index().retrieve_for(
-                    opportunity.opportunity_id, t(chip, lang))
-                with st.spinner(""):
+                with ai_stages("stage_ask_search", "stage_ask_gather",
+                               "stage_ask_write") as stages:
+                    evidence = get_rag_index().retrieve_for(
+                        opportunity.opportunity_id, t(chip, lang))
+                    stages.advance()
+
+                    evidence = list(evidence)
+                    stages.advance()
+
                     st.session_state[state_key] = answer_followup(
                         t(chip, lang), evidence, lang)
                 st.rerun()
@@ -1590,6 +1814,56 @@ def stage_markup(labels, active: int, note: str = "") -> str:
     return f'<div class="sa-stages">{"".join(rows)}{footer}</div>'
 
 
+class Stages:
+    """
+    A staged progress panel bound to one slot.
+
+    `advance()` is called only where real work has genuinely finished, which
+    is the whole design: there is no timer, no thread and no interpolation
+    anywhere in this class, so the panel cannot claim progress that has not
+    happened (V3 spec 42 - do not fabricate progress).
+
+    Used as a context manager so the slot is always cleared, including when
+    the model call raises.
+    """
+
+    def __init__(self, labels, note: str = ""):
+        self.labels = [l for l in labels if l]
+        self.note = note
+        self.slot = st.empty()
+        self.index = 0
+        self._paint()
+
+    def _paint(self) -> None:
+        self.slot.markdown(stage_markup(self.labels, self.index, self.note),
+                           unsafe_allow_html=True)
+
+    def advance(self) -> None:
+        """One real step finished; the next is now running."""
+        if self.index < len(self.labels) - 1:
+            self.index += 1
+            self._paint()
+
+    def __enter__(self) -> "Stages":
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        self.slot.empty()
+        return False
+
+
+def ai_stages(*label_keys) -> Stages:
+    """
+    A progress panel for a model call, labelled in the current language.
+
+    The footnote is chosen rather than fixed: "your file is not stored" is the
+    upload flow's promise and there is no file here, and promising a remote
+    call when no key is configured would describe work that is not happening.
+    """
+    note = "stage_running_note_ai" if is_ai_available() else "stage_running_note_local"
+    return Stages([t(key, lang) for key in label_keys], t(note, lang))
+
+
 def read_ad_in_stages(file_bytes: bytes, mime_type: str, screenable: bool):
     """
     Run the upload pipeline, showing each step as it actually happens.
@@ -1770,6 +2044,10 @@ def render_match_card(match, rank: int = 0, highlight: bool = False,
     if animation:
         # Information arriving, not cards falling. Plays once per result set.
         st.markdown(f'<div class="{animation}">', unsafe_allow_html=True)
+    if highlight:
+        # Surface level 4 (spec 7): the top match is not another card in a
+        # list, so it does not get the same border as one.
+        st.markdown('<div class="sa-featured-marker"></div>', unsafe_allow_html=True)
     with st.container(border=True):
         head_col, badge_col = st.columns([3, 2])
         with head_col:
@@ -1810,47 +2088,75 @@ def render_match_card(match, rank: int = 0, highlight: bool = False,
         render_deadline(match)
         render_next_action(match)
 
-        with st.expander(t("view_eligibility", lang), expanded=highlight):
-            # P2-3: eight sections stacked in one scroll was the clutter. They
-            # group naturally by the question being asked - am I eligible,
-            # what do I need, who says so, help me understand - so the tabs
-            # follow the questions rather than the implementation.
-            eligibility_tab, documents_tab, source_tab, ask_tab = st.tabs([
-                t("tab_eligibility", lang), t("tab_documents", lang),
-                t("tab_source", lang), t("tab_ask", lang)])
-
-            with eligibility_tab:
-                render_scorecard(match)
+        if highlight:
+            # Spec 20: the verdict is the reason this person is on the page.
+            # No expander, no click - the scorecard is simply here.
+            render_eligibility_detail(match)
+            rule()
+            render_supporting_detail(match)
+        else:
+            with st.expander(t("view_eligibility", lang)):
+                render_eligibility_detail(match)
                 rule()
-                render_reasons(match)
-                quota_note = opportunity.eligibility_conditions.special_quota_note
-                if quota_note:
-                    callout(quota_note, title=t("quota_note_label", lang), tone="info")
-
-            with documents_tab:
-                render_documents(opportunity)
-                rule()
-                render_timeline(opportunity)
-
-            with source_tab:
-                render_source_card(opportunity)
-                if opportunity.disclaimer:
-                    st.caption(opportunity.disclaimer)
-
-            with ask_tab:
-                render_plain_language(opportunity)
-                rule()
-                render_contextual_followup(match)
-                rule()
-                explain_key = f"explain_{opportunity.opportunity_id}"
-                if st.button(t("ai_explain_button", lang), key=f"btn_{explain_key}"):
-                    with st.spinner(""):
-                        st.session_state.explanations[explain_key] = explain_match(
-                            describe_profile(current_profile(), lang),
-                            build_result_summary(match), lang)
-                render_ai_text(st.session_state.explanations.get(explain_key))
+                render_supporting_detail(match)
     if animation:
         st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_eligibility_detail(match) -> None:
+    """The verdict and its reasoning. Never behind a control on the top match."""
+    opportunity = match.opportunity
+    render_scorecard(match)
+    rule()
+    render_reasons(match)
+    quota_note = opportunity.eligibility_conditions.special_quota_note
+    if quota_note:
+        callout(quota_note, title=t("quota_note_label", lang), tone="info")
+
+
+def render_supporting_detail(match) -> None:
+    """
+    Everything the verdict rests on: documents, provenance, and the help.
+
+    P2-3: eight sections stacked in one scroll was the clutter. They group by
+    the question being asked - what do I need, who says so, help me understand
+    - so the tabs follow the questions rather than the implementation. These
+    three stay tabbed even on the featured card: they are reference material
+    consulted one at a time, which is what a tab is actually for. The verdict
+    above them is not, which is why it is no longer one of them.
+    """
+    opportunity = match.opportunity
+    documents_tab, source_tab, ask_tab = st.tabs([
+        t("tab_documents", lang), t("tab_source", lang), t("tab_ask", lang)])
+
+    with documents_tab:
+        render_documents(opportunity)
+        rule()
+        render_timeline(opportunity)
+
+    with source_tab:
+        render_source_card(opportunity)
+        if opportunity.disclaimer:
+            st.caption(opportunity.disclaimer)
+
+    with ask_tab:
+        render_plain_language(opportunity)
+        rule()
+        render_contextual_followup(match)
+        rule()
+        explain_key = f"explain_{opportunity.opportunity_id}"
+        if st.button(t("ai_explain_button", lang), key=f"btn_{explain_key}"):
+            with ai_stages("stage_explain_profile", "stage_explain_decision",
+                           "stage_explain_write") as stages:
+                profile_summary = describe_profile(current_profile(), lang)
+                stages.advance()
+
+                result_summary = build_result_summary(match)
+                stages.advance()
+
+                st.session_state.explanations[explain_key] = explain_match(
+                    profile_summary, result_summary, lang)
+        render_ai_text(st.session_state.explanations.get(explain_key))
 
 
 def build_result_summary(match) -> str:
@@ -1915,8 +2221,20 @@ def render_followup() -> None:
                              placeholder=t("ask_placeholder", lang),
                              label_visibility="collapsed", key="followup_question")
     if st.button(t("ask_button", lang), key="ask_btn", type="primary") and question.strip():
-        with st.spinner(""):
-            evidence = get_rag_index().retrieve(question, top_k=3)
+        # Four stages because there are four real boundaries: the index has to
+        # exist, the search has to run, the passages have to be gathered, and
+        # only then does the model get asked. The last one is the slow one.
+        with ai_stages("stage_ask_understand", "stage_ask_search",
+                       "stage_ask_gather", "stage_ask_write") as stages:
+            index = get_rag_index()
+            stages.advance()
+
+            evidence = index.retrieve(question, top_k=3)
+            stages.advance()
+
+            evidence = list(evidence)
+            stages.advance()
+
             answer = answer_followup(question, evidence, lang)
         render_ai_text(answer)
 
@@ -2020,21 +2338,22 @@ def render_wizard() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Tabs
+# Screens
+#
+# One section renders per run. Not `st.tabs`: a tab strip renders every panel
+# and hides the inactive ones, which both costs work on every rerun and tells
+# the user they are looking at one page with three drawers. These are three
+# screens (spec 45.3).
 # ---------------------------------------------------------------------------
 
-tab_discover, tab_read, tab_how = st.tabs(
-    [t("nav_discover", lang), t("nav_read", lang), t("nav_how", lang)])
-
-
-with tab_discover:
+def render_discover() -> None:
     if st.session_state.view == "home":
         render_home()
     else:
         render_wizard()
 
 
-with tab_read:
+def render_read() -> None:
     section_title(t("upload_ad_heading", lang), t("upload_ad_intro", lang))
 
     if not is_ai_available():
@@ -2125,7 +2444,7 @@ with tab_read:
     st.caption(t("upload_privacy_note", lang))
 
 
-with tab_how:
+def render_how() -> None:
     section_title(t("how_heading", lang), t("how_intro", lang))
 
     for index, column in enumerate(st.columns(3), start=1):
@@ -2165,3 +2484,11 @@ with tab_how:
 
     render_pipeline()
     render_footer()
+
+
+# ---------------------------------------------------------------------------
+# One screen per run
+# ---------------------------------------------------------------------------
+
+{"discover": render_discover, "read": render_read,
+ "how": render_how}[st.session_state.section]()

@@ -146,6 +146,21 @@ ROMAN: Dict[str, str] = {
     "stage_read": "Dastavez ko AI se parha ja raha hai",
     "stage_structure": "Maloomat ko tarteeb diya ja raha hai",
     "stage_screen": "Aap ke jawabat se jaancha ja raha hai",
+    # -- staged progress for the AI calls --
+    "stage_ask_understand": "Aap ka sawal samjha ja raha hai",
+    "stage_ask_search": "Hamare paas mojood indiraaj mein talaash jari hai",
+    "stage_ask_gather": "Qareeb tareen indiraaj jama kiye ja rahe hain",
+    "stage_ask_write": "Jawab likha ja raha hai, hawalon ke saath",
+    "stage_explain_profile": "Aap ke jawabat parhe ja rahe hain",
+    "stage_explain_decision": "Qawaid ke engine ka faisla parha ja raha hai",
+    "stage_explain_write": "Ise aasan alfaaz mein bayan kiya ja raha hai",
+    "stage_simplify_read": "Sarkari ibarat parhi ja rahi hai",
+    "stage_simplify_write": "Ise aasan zaban mein dobara likha ja raha hai",
+    "stage_running_note_ai": "Yeh amal Google ke servers par hota hai aur chand second leta hai. "
+                             "Aap ka likha hua mehfooz nahi kiya jata, aur jawab sirf isi safhe par "
+                             "dikhaye gaye indiraaj se ban sakta hai.",
+    "stage_running_note_local": "Isi safhe ke indiraaj se kaam kiya ja raha hai. Koi AI key mojood "
+                                "nahi, is liye neeche ki ibarat aarzi hai.",
     "stage_running_note": "Parhne ka amal Google ke servers par hota hai aur chand second leta "
                           "hai. Aap ki file mehfooz nahi ki jati.",
     "extracted_requirements": "Is dastavez mein bayan karda shartein",
@@ -230,7 +245,9 @@ ROMAN: Dict[str, str] = {
     "path_assistance": "Madad dhoondein",
     "path_check_ad": "Ishtihar ki jaanch karein",
     "path_start": "Yahan se shuru karein",
-    "home_upload_hint": "Upar diya 'Ad parhwayein' tab istemaal karein.",
+    "hero_preview_alt": "Sahulat ke nataij ki jhalak: aik mauqa, janchi gayi sharait, aur agla qadam.",
+    "hero_preview_note": "Yeh hamari fehrist se haqeeqi nataij hain, namoona profile par janche gaye - har zumre se aik, koi tasveeri namoona nahi.",
+    "home_upload_hint": "Sahulat Lens kholta hai.",
     "path_check_ad_body": "Kahin koi poster, screenshot ya PDF mila? Use parhwa kar jaanch lein.",
     "benefits_heading": "Sahulat kyun",
     "benefit_personal_title": "Aap ke mutabiq",
@@ -623,6 +640,7 @@ ROMAN: Dict[str, str] = {
     "footer_tagline": "Mauqon tak rasai, aasan tareeqe se.",
     "footer_trust": "Bharosa",
     "footer_language": "Zubaan",
+    "language_help": "Poore safhe ki zaban tabdeel karein.",
     "footer_built": "Pakistan ke liye banaya gaya",
     "footer_disclaimer": "Sirf maloomati rehnumai. Sahulat AI koi sarkari eligibility faisla nahi "
                          "karta, shanakht ki tasdeeq nahi karta, aur aap ki taraf se darkhwast "
