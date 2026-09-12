@@ -323,6 +323,8 @@ ROMAN: Dict[str, str] = {
     "freshness_stale": "Ghaliban purani",
     "freshness_never": "Hamari taraf se kabhi tasdeeq nahi",
     "freshness_days": "{days} din pehle jaancha gaya",
+    "freshness_today": "Aaj jancha gaya",
+    "freshness_yesterday": "Kal jancha gaya",
     "freshness_never_note": "Hamari team ne is record ki official source se tasdeeq nahi ki. "
                             "Fehrist mein hona maujooda hone ka saboot nahi.",
     "freshness_prompt": "In tafseelat par bharosa karne se pehle official page par tasdeeq karein.",

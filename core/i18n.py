@@ -499,6 +499,8 @@ STRINGS: Dict[str, Dict[str, str]] = {
     "freshness_stale": {"en": "Likely out of date", "ur": "غالباً پرانی"},
     "freshness_never": {"en": "Never verified by us", "ur": "ہماری طرف سے کبھی تصدیق نہیں"},
     "freshness_days": {"en": "Checked {days} days ago", "ur": "{days} دن پہلے جانچا گیا"},
+    "freshness_today": {"en": "Checked today", "ur": "آج جانچا گیا"},
+    "freshness_yesterday": {"en": "Checked yesterday", "ur": "کل جانچا گیا"},
     "freshness_never_note": {
         "en": "Nobody on our team has confirmed this record against the official source. "
               "Being in the catalogue is not evidence that it is current.",
@@ -1476,6 +1478,13 @@ def describe_freshness(state: str, days=None, lang: str = "en"):
         return label, t("freshness_never_note", lang)
     if days is None:
         return label, ""
+    # "Checked 0 days ago" is how a template reads when nobody checked the
+    # boundary case. A record verified today is the most common state in a
+    # freshly curated catalogue, so it is the one worth phrasing properly.
+    if days <= 0:
+        return label, t("freshness_today", lang)
+    if days == 1:
+        return label, t("freshness_yesterday", lang)
     return label, t("freshness_days", lang, days=days)
 
 

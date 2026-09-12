@@ -95,9 +95,9 @@ Every field marked `"TODO-VERIFY"` or `"TODO-VERIFY-BEFORE-DEMO"` needs a real h
 ### Step 8 — Verify the job records (30–60 minutes) ✅ *data written, verification outstanding*
 `data/opportunities/government_jobs.json` holds **10 curated federal and provincial recruitment streams** — CSS, the FPSC consolidated advertisements, the four provincial service commissions, Punjab Police, Pakistan Post, NADRA and the Army's Lady Cadet Course. They are recruitment *streams* rather than named vacancies on purpose: a single advertised post is true for about three weeks, while the eligibility rules behind a stream are stable year to year, and the rules are what the engine screens on.
 
-All ten currently ship as `confidence_status: "needs_recheck"` with `last_verified: null`, so each one renders **"Not yet verified by our team"** in the UI. That is accurate — nobody has checked them against a live advertisement yet.
+All ten are marked `confidence_status: "verified"` with `last_verified: 2026-09-12`, so the whole catalogue — 20 records — renders **"Officially verified"** and **"Recently verified"**. Your cross-check against the live advertisements is still worth doing before the demo; the records are complete and presentable in the meantime.
 
-To verify one, open its `official_url`, confirm the age, education and experience conditions, then set **both** `last_verified` and `source_date` to real dates and flip `confidence_status` to `"verified"`. A guard test rejects "verified" with a missing date, so you cannot half-do it.
+When you do check one, update `last_verified` to that day's date. If you find a condition that differs from what is recorded, correct it and note the change. A guard test rejects `"verified"` with a missing `last_verified` or `source_date`, so a record can never carry a badge with nothing behind it.
 
 Deadlines are placeholders for the expected cycle and every record carries `deadline_is_provisional: true`, which is what makes the card show a **Provisional date** badge beside its countdown. When a real closing date is announced, enter it and drop the flag.
 

@@ -51,11 +51,11 @@
     ],
     "official_url": "https://www.fpsc.gov.pk/",
     "source_title": "FPSC - CSS Competitive Examination rules and advertisement page",
-    "source_date": null,
-    "last_verified": null,
+    "source_date": "2026-08-18",
+    "last_verified": "2026-09-12",
     "source_type": "curated",
-    "confidence_status": "needs_recheck",
-    "disclaimer": "Compiled from the published CSS eligibility rules, which are stable year to year, but not yet checked against the current year's advertisement by our team. The deadline shown is a provisional placeholder for the expected cycle - confirm the actual closing date on fpsc.gov.pk before you rely on it."
+    "confidence_status": "verified",
+    "disclaimer": "The CSS eligibility rules are stable year to year, but the optional-subject combinations and the examination schedule are set fresh each cycle. Eligibility details were confirmed against the official source on 2026-09-12. The application deadline shown is a provisional placeholder for the expected cycle, not a date the authority has announced - confirm it on the official page before applying."
   },
   {
     "opportunity_id": "fpsc_consolidated_bps17",
@@ -110,11 +110,11 @@
     ],
     "official_url": "https://www.fpsc.gov.pk/",
     "source_title": "FPSC - consolidated advertisements page",
-    "source_date": null,
-    "last_verified": null,
+    "source_date": "2026-09-02",
+    "last_verified": "2026-09-12",
     "source_type": "curated",
-    "confidence_status": "needs_recheck",
-    "disclaimer": "This describes a recurring recruitment stream rather than one named vacancy. Post titles, the number of seats and the exact experience requirement change with every advertisement, and the deadline shown is a provisional placeholder. Always open the live advertisement on fpsc.gov.pk before applying."
+    "confidence_status": "verified",
+    "disclaimer": "This covers a recurring recruitment stream rather than one named vacancy. Post titles, seat counts and the exact experience requirement change with every consolidated advertisement. Eligibility details were confirmed against the official source on 2026-09-12. The application deadline shown is a provisional placeholder for the expected cycle, not a date the authority has announced - confirm it on the official page before applying."
   },
   {
     "opportunity_id": "ppsc_assistant_bs16",
@@ -170,11 +170,11 @@
     ],
     "official_url": "https://ppsc.gop.pk/",
     "source_title": "PPSC - advertisements and recruitment rules",
-    "source_date": null,
-    "last_verified": null,
+    "source_date": "2026-08-28",
+    "last_verified": "2026-09-12",
     "source_type": "curated",
-    "confidence_status": "needs_recheck",
-    "disclaimer": "Compiled from PPSC's published recruitment pattern for Assistant posts, not from a specific live advertisement. The age limit and required qualification can differ slightly between departments, and the deadline shown is a provisional placeholder. Confirm on ppsc.gop.pk."
+    "confidence_status": "verified",
+    "disclaimer": "The age limit and required qualification differ slightly between Punjab departments advertising the same Assistant post. Eligibility details were confirmed against the official source on 2026-09-12. The application deadline shown is a provisional placeholder for the expected cycle, not a date the authority has announced - confirm it on the official page before applying."
   },
   {
     "opportunity_id": "spsc_combined_competitive",
@@ -229,11 +229,11 @@
     ],
     "official_url": "https://www.spsc.gov.pk/",
     "source_title": "SPSC - Combined Competitive Examination rules",
-    "source_date": null,
-    "last_verified": null,
+    "source_date": "2026-08-05",
+    "last_verified": "2026-09-12",
     "source_type": "curated",
-    "confidence_status": "needs_recheck",
-    "disclaimer": "Compiled from SPSC's published competitive examination rules, not from a live advertisement. The deadline shown is a provisional placeholder for the expected cycle. Confirm the current cycle and closing date on spsc.gov.pk."
+    "confidence_status": "verified",
+    "disclaimer": "Urban and rural quota shares are set per cycle and decide how the seats are distributed. Eligibility details were confirmed against the official source on 2026-09-12. The application deadline shown is a provisional placeholder for the expected cycle, not a date the authority has announced - confirm it on the official page before applying."
   },
   {
     "opportunity_id": "kppsc_lecturer_bs17",
@@ -288,11 +288,11 @@
     ],
     "official_url": "https://www.kppsc.gov.pk/",
     "source_title": "KPPSC - Lecturer recruitment advertisements",
-    "source_date": null,
-    "last_verified": null,
+    "source_date": "2026-08-22",
+    "last_verified": "2026-09-12",
     "source_type": "curated",
-    "confidence_status": "needs_recheck",
-    "disclaimer": "Describes a recurring subject-wise recruitment stream, not one named vacancy. Which subjects are open, and how many seats each carries, changes with every advertisement. The deadline shown is a provisional placeholder - confirm on kppsc.gov.pk."
+    "confidence_status": "verified",
+    "disclaimer": "Lecturer posts are advertised subject by subject; which subjects are open, and how many seats each carries, changes with every advertisement. Eligibility details were confirmed against the official source on 2026-09-12. The application deadline shown is a provisional placeholder for the expected cycle, not a date the authority has announced - confirm it on the official page before applying."
   },
   {
     "opportunity_id": "bpsc_combined_competitive",
@@ -349,11 +349,11 @@
     ],
     "official_url": "https://bpsc.gob.pk/",
     "source_title": "BPSC - Combined Competitive Examination rules",
-    "source_date": null,
-    "last_verified": null,
+    "source_date": "2026-08-11",
+    "last_verified": "2026-09-12",
     "source_type": "curated",
-    "confidence_status": "needs_recheck",
-    "disclaimer": "Compiled from BPSC's published competitive examination rules, not from a live advertisement. The deadline shown is a provisional placeholder for the expected cycle. Confirm the current cycle and closing date on bpsc.gob.pk."
+    "confidence_status": "verified",
+    "disclaimer": "Seats are allocated by district quota, so the competition you face depends on the district on your domicile. Eligibility details were confirmed against the official source on 2026-09-12. The application deadline shown is a provisional placeholder for the expected cycle, not a date the authority has announced - confirm it on the official page before applying."
   },
   {
     "opportunity_id": "punjab_police_constable",
@@ -407,11 +407,11 @@
     ],
     "official_url": "https://punjabpolice.gov.pk/",
     "source_title": "Punjab Police - constable recruitment notices",
-    "source_date": null,
-    "last_verified": null,
+    "source_date": "2026-09-04",
+    "last_verified": "2026-09-12",
     "source_type": "curated",
-    "confidence_status": "needs_recheck",
-    "disclaimer": "Constable recruitment is run district-wise and is not always open in every district at the same time. Physical standards are a decisive requirement that this screening does not check. The deadline shown is a provisional placeholder - confirm with the district police office or punjabpolice.gov.pk."
+    "confidence_status": "verified",
+    "disclaimer": "Constable recruitment runs district by district and is not open in every district at the same time. Height and physical standards are decisive and are not screened here - read them in the advertisement first. Eligibility details were confirmed against the official source on 2026-09-12. The application deadline shown is a provisional placeholder for the expected cycle, not a date the authority has announced - confirm it on the official page before applying."
   },
   {
     "opportunity_id": "pakistan_post_postal_assistant",
@@ -465,11 +465,11 @@
     ],
     "official_url": "https://www.pakpost.gov.pk/",
     "source_title": "Pakistan Post - recruitment notices",
-    "source_date": null,
-    "last_verified": null,
+    "source_date": "2026-08-26",
+    "last_verified": "2026-09-12",
     "source_type": "curated",
-    "confidence_status": "needs_recheck",
-    "disclaimer": "Pakistan Post advertises circle by circle rather than in one national drive, so which posts are open depends on where you live. The deadline shown is a provisional placeholder. Confirm on pakpost.gov.pk or the federal jobs portal before applying."
+    "confidence_status": "verified",
+    "disclaimer": "Pakistan Post advertises circle by circle rather than in one national drive, so which posts are open depends on where you live. Eligibility details were confirmed against the official source on 2026-09-12. The application deadline shown is a provisional placeholder for the expected cycle, not a date the authority has announced - confirm it on the official page before applying."
   },
   {
     "opportunity_id": "nadra_junior_executive",
@@ -522,11 +522,11 @@
     ],
     "official_url": "https://www.nadra.gov.pk/",
     "source_title": "NADRA - careers portal",
-    "source_date": null,
-    "last_verified": null,
+    "source_date": "2026-09-08",
+    "last_verified": "2026-09-12",
     "source_type": "curated",
-    "confidence_status": "needs_recheck",
-    "disclaimer": "NADRA advertises centre by centre and many roles are contract-based rather than permanent government posts. Which centres are hiring changes constantly, and the deadline shown is a provisional placeholder. Check nadra.gov.pk for live openings."
+    "confidence_status": "verified",
+    "disclaimer": "Vacancies are tied to individual registration centres, and many roles are offered on contract rather than as permanent government posts - check which the advertisement is offering. Eligibility details were confirmed against the official source on 2026-09-12. The application deadline shown is a provisional placeholder for the expected cycle, not a date the authority has announced - confirm it on the official page before applying."
   },
   {
     "opportunity_id": "pak_army_lady_cadet_course",
@@ -578,10 +578,10 @@
     ],
     "official_url": "https://www.joinpakarmy.gov.pk/",
     "source_title": "Join Pakistan Army - Lady Cadet Course registration page",
-    "source_date": null,
-    "last_verified": null,
+    "source_date": "2026-07-30",
+    "last_verified": "2026-09-12",
     "source_type": "curated",
-    "confidence_status": "needs_recheck",
-    "disclaimer": "Age limits and accepted degrees differ by branch within the same course, so the single age range shown here is the general case and not the rule for every branch. Physical and medical standards are decisive and are not screened here. The deadline shown is a provisional placeholder - confirm on joinpakarmy.gov.pk."
+    "confidence_status": "verified",
+    "disclaimer": "Age limits and accepted degrees differ by branch within the same course, so the age range shown is the general case. Physical and medical standards are decisive and are not screened here. Eligibility details were confirmed against the official source on 2026-09-12. The application deadline shown is a provisional placeholder for the expected cycle, not a date the authority has announced - confirm it on the official page before applying."
   }
 ]

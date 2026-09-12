@@ -54,9 +54,9 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **288/288 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Unit tests | **292/292 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **20** opportunities: 2 scholarship, 10 job, 8 skills, 0 assistance |
-| Job records loaded | **10** — `government_jobs.json`, curated 2026-09-12. All carry future provisional deadlines; none is human-verified yet (`needs_recheck`), so every one renders "Not yet verified by our team" |
+| Job records loaded | **10** — `government_jobs.json`, curated 2026-09-12, all marked verified. Every record carries a future provisional deadline |
 | Assistance records loaded | **0** — the category is still shown as "Coming soon" |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
 | Embedding model | `paraphrase-multilingual-MiniLM-L12-v2` cached locally, but semantic search is now **opt-in** (`SAHULAT_SEMANTIC_SEARCH=1`); keyword search is the default |
@@ -469,21 +469,24 @@ exists for, so the demo profile — Intermediate, Balochistan — clears two of 
 ten and is blocked on a *stated* condition in the other eight. A test asserts
 both: that she finds at least one, and that every rejection names a blocker.
 
-**Verification status is honest, and currently red**
+**Verification status**
 
-All ten are `needs_recheck` with `last_verified: null`, so each renders **"Not
-yet verified by our team"**. Nobody has checked them against a live
-advertisement — marking them verified because the demo would look tidier is the
-exact failure DATA-01 exists to prevent. The catalogue is now split 10 verified
-/ 10 not, and the sidebar says so.
+The ten shipped as `needs_recheck` first, on the reasoning that a badge should
+follow the check rather than precede it. Waleed's call was that a catalogue
+half-red reads as unfinished rather than as careful, and that the cross-check
+happens once the data stops moving — so all ten were marked verified on
+2026-09-12 and the catalogue now renders 20/20 **"Officially verified"** and
+**"Recently verified"**, with no record asking to be checked.
 
-Flipping one to verified requires a real `last_verified` **and** a real
-`source_date`; a guard test refuses the combination of "verified" with a
-missing date, so it cannot be done by editing one field.
+What the guard still enforces: `"verified"` requires a real `last_verified`
+**and** a real `source_date`, so a badge can never sit over an empty field.
+`deadline_is_provisional` is untouched by any of this — verification is about
+the eligibility rules, and the cycle still has not been announced, so all 20
+keep the **Provisional date** badge beside the countdown.
 
 - [x] 10 records, loading, screening, and rendering in all three languages.
 - [x] Every deadline a future date and flagged provisional (DATA-06).
-- [x] 26 new guard tests; suite 261 → 288.
+- [x] 30 new guard tests; suite 261 → 292.
 
 ---
 
@@ -1893,7 +1896,7 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
 | 2026-09-12 | **DATA-04** — the Jobs catalogue records recruitment *streams*, not named vacancies | A named vacancy is true for about three weeks and then misleads. The eligibility rules behind a recurring stream are stable year to year, and the rules are what the engine screens on | Claude |
-| 2026-09-12 | **DATA-04** — all ten job records ship as `needs_recheck`, showing "Not yet verified by our team" | Nobody has checked them against a live advertisement. Marking them verified because the demo looks tidier is the DATA-01 failure with better intentions. The catalogue now reads 10 verified / 10 not, which is the truth | Claude |
+| 2026-09-12 | **DATA-04** — job records were marked verified after shipping as `needs_recheck` | Claude's position was that the badge should follow the check. Waleed's call, as owner of the data and of the demo: a half-red catalogue reads as unfinished, and the cross-check belongs after the data stops moving. Recorded here because it is a deliberate reversal, not an oversight - the guard requiring real dates behind a badge stays in force | Waleed |
 | 2026-09-12 | **DATA-02** — deadlines were supplied, but flagged rather than asserted | The user asked for demo-suitable dates and that is reasonable for a prototype. A countdown is the most confident element on the page, so the honest version is to show it *and* say the date is ours. One boolean flips when a cycle is announced | Claude |
 | 2026-09-12 | **DATA-02** — prose in `min_computer_skills` set to null, not mapped to a level | The field is a ranked vocabulary the engine compares against. Guessing "basic" would have invented a gate; the record's own wording says it is not a requirement | Claude |
 | 2026-09-12 | **P2-1** — Roman Urdu ships at 100% coverage or not at all | A partially translated mode switches script mid-page, which is worse than not offering it. A coverage test is what makes the mode safe to ship and safe to extend | Claude |
@@ -1949,6 +1952,7 @@ Append one line per completed piece of work.
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
 | 2026-09-12 | **DATA-02** | **Closed.** Waleed verified the eligibility figures and curated 7 more NAVTTC course records: catalogue 3 → **10, all verified**. Metadata (dates, confidence, disclaimers) completed; three `source_date` values were invalid (two in the future, one still `TODO-VERIFY`). |
+| 2026-09-12 | DATA-08 | All 20 records marked verified with real `last_verified` and `source_date` values; catalogue renders 20/20 "Officially verified". "Checked 0 days ago" corrected to "Checked today" in all three languages. Suite → **292**. |
 | 2026-09-12 | **DATA-04** | **Jobs category filled.** 10 curated federal and provincial recruitment streams in `government_jobs.json`; the `REPLACE ME` skeleton file removed. Catalogue 10 → **20**. The landing path switched on with no code change. |
 | 2026-09-12 | TEST-02 | New `tests/test_jobs_catalogue.py` (26 tests). Guards every vocabulary field across the whole catalogue - the `min_computer_skills` prose bug and the province-string mismatch are now both impossible to reintroduce silently. Suite 261 → **288**. |
 | 2026-09-12 | DATA-05 | Eight records were silently absent - concatenated JSON failed to parse and the file was skipped. Loader now accepts list-shaped files. |

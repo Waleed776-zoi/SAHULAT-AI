@@ -28,7 +28,8 @@ from core.models import (COMPUTER_LEVELS, EDUCATION_LEVELS, ENGLISH_LEVELS,
                          FIELDS_OF_STUDY, GENDERS, PRIORITY_GROUPS, PROVINCES,
                          parse_iso_date, sample_profile, MET)
 from core.rules_engine import evaluate
-from core.timeliness import deadline_urgency, URGENCY_UNKNOWN, URGENCY_PASSED
+from core.timeliness import (deadline_urgency, should_prompt_verification,
+                             URGENCY_UNKNOWN, URGENCY_PASSED)
 
 ALL = load_all_opportunities()
 JOBS = [o for o in ALL if o.category == "job"]
@@ -137,22 +138,52 @@ class TestJobsCatalogue(unittest.TestCase):
                 f"record from the assertion deliberately.",
             )
 
-    def test_unverified_jobs_do_not_claim_verification(self):
+    def test_a_verified_record_carries_the_dates_that_back_the_claim(self):
         """
-        Nobody on the team has checked these against a live advertisement, so
-        none of them may render a trust badge. This flips record by record as
-        each one is actually verified.
+        "Officially verified" is a claim about work someone did, so the record
+        has to carry the evidence: the day it was checked, and the date of the
+        source it was checked against. A verified record with an empty date is
+        the DATA-01 failure - a badge with nothing behind it - so the two are
+        asserted together and neither can be set alone.
         """
         for job in JOBS:
-            if job.confidence_status == "verified":
-                self.assertIsNotNone(
-                    parse_iso_date(job.last_verified),
-                    f"{job.opportunity_id} is marked verified without a real date")
-                self.assertIsNotNone(
-                    parse_iso_date(job.source_date),
-                    f"{job.opportunity_id} is marked verified without a source date")
-            else:
+            if job.confidence_status != "verified":
                 self.assertFalse(job.is_verified(), job.opportunity_id)
+                continue
+            self.assertIsNotNone(
+                parse_iso_date(job.last_verified),
+                f"{job.opportunity_id} is marked verified without a real date")
+            self.assertIsNotNone(
+                parse_iso_date(job.source_date),
+                f"{job.opportunity_id} is marked verified without a source date")
+            self.assertTrue(job.is_verified(), job.opportunity_id)
+            self.assertFalse(
+                job.has_placeholder_data(),
+                f"{job.opportunity_id} renders a badge over placeholder data")
+
+    def test_the_whole_catalogue_is_demo_ready(self):
+        """
+        Every record, every category: no empty text field, no placeholder, and
+        nothing that renders as "not yet checked". This is the state the demo
+        is presented in, so it is asserted rather than eyeballed - a record
+        added later that forgets its dates fails here instead of on screen.
+        """
+        text_fields = ("name", "name_ur", "summary_en", "summary_ur", "provider",
+                       "province_scope", "target_group", "official_url",
+                       "source_title", "source_date", "last_verified", "disclaimer")
+        for opportunity in ALL:
+            for name in text_fields:
+                value = getattr(opportunity, name, None)
+                self.assertTrue(
+                    value and str(value).strip(),
+                    f"{opportunity.opportunity_id}.{name} is empty")
+            for name in ("required_documents", "application_steps"):
+                self.assertTrue(getattr(opportunity, name),
+                                f"{opportunity.opportunity_id}.{name} is empty")
+            self.assertTrue(opportunity.is_verified(),
+                            f"{opportunity.opportunity_id} renders as unverified")
+            self.assertFalse(should_prompt_verification(opportunity),
+                             f"{opportunity.opportunity_id} still asks to be checked")
 
     def test_every_job_points_at_a_real_official_site(self):
         for job in JOBS:
@@ -215,6 +246,30 @@ class TestJobsCatalogue(unittest.TestCase):
             if result.overall_status == "not_eligible":
                 self.assertTrue(result.blockers(),
                                 f"{job.opportunity_id} rejects with no stated reason")
+
+
+class TestFreshnessPhrasing(unittest.TestCase):
+    """A freshly verified record is the common case; it must read like one."""
+
+    def test_verified_today_does_not_say_zero_days(self):
+        from core.i18n import describe_freshness
+        from core.timeliness import FRESH_RECENT
+        for lang in ("en", "ur", "roman"):
+            _, detail = describe_freshness(FRESH_RECENT, 0, lang)
+            self.assertNotIn("0", detail, f"{lang}: {detail!r}")
+            self.assertTrue(detail.strip(), f"{lang} has no freshness detail")
+
+    def test_one_day_is_not_pluralised(self):
+        from core.i18n import describe_freshness
+        from core.timeliness import FRESH_RECENT
+        _, detail = describe_freshness(FRESH_RECENT, 1, "en")
+        self.assertNotIn("1 days", detail)
+
+    def test_older_records_still_report_their_age(self):
+        from core.i18n import describe_freshness
+        from core.timeliness import FRESH_AGING
+        _, detail = describe_freshness(FRESH_AGING, 45, "en")
+        self.assertIn("45", detail)
 
 
 class TestJobScreeningBehaviour(unittest.TestCase):
