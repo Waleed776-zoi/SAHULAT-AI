@@ -54,13 +54,13 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **318/318 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Unit tests | **335/335 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **30** opportunities: 2 scholarship, 10 job, 8 skills, 10 assistance. **No category is empty.** |
 | Job records loaded | **10** — `government_jobs.json`, curated 2026-09-12, all marked verified. Every record carries a future provisional deadline |
 | Assistance records loaded | **10** — `public_assistance.json`, curated 2026-09-12. All continuous-enrolment; two are gated on `required_groups` |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
 | Embedding model | `paraphrase-multilingual-MiniLM-L12-v2` cached locally, but semantic search is now **opt-in** (`SAHULAT_SEMANTIC_SEARCH=1`); keyword search is the default |
-| First render | **1.16s**, with no torch/sentence-transformers/chromadb imported at page load (was ~30–35s) |
+| First render | **1.05s** (was 1.16s — only one screen builds per run since UI-01), with no torch/sentence-transformers/chromadb imported at page load (was ~30–35s) |
 | Gemini API key | **Not configured.** No `.env`, no `.streamlit/secrets.toml`. App runs in labelled mock mode. |
 | `scripts/` | Empty directory (consistent with README — `build_vector_store.py` was never written) |
 | Git | Repo live at `github.com/Waleed776-zoi/SAHULAT-AI`; work branched on `feature/ux-overhaul-and-fixes` |
@@ -110,6 +110,9 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | DATA-07 | Public Assistance category is still empty | data | **P2** | **DONE** | — |
 | DATA-09 | Restricted programmes had no gate: `priority_groups` is advantage-only | `models.py` + `rules_engine.py` | **P1** | **DONE** | — |
 | DATA-10 | "Never closes" and "no date on record" shared one label | `models.py` + `timeliness.py` | **P1** | **DONE** | — |
+| UI-01 | `st.tabs` was the product architecture (V3 spec 45.3) | `app.py` | **P0** | **DONE** | — |
+| UI-02 | The eligibility verdict sat inside an expander (V3 spec 20) | `app.py` | **P0** | **DONE** | — |
+| UI-03 | The hero decorated rather than demonstrated (V3 spec 13.2) | `app.py` | **P0** | **DONE** | — |
 | BUG-03 | Zero income / zero marks silently become "not provided" | `app.py` | **P1** | **DONE** | — |
 | BUG-04 | Expired deadline reported as user ineligibility | `rules_engine.py` | **P1** | **DONE** | — |
 | I18N-01 | `name_ur` / `summary_ur` exist in data but are never displayed | `app.py` | **P1** | **DONE** | — |
@@ -489,6 +492,89 @@ keep the **Provisional date** badge beside the countdown.
 - [x] 10 records, loading, screening, and rendering in all three languages.
 - [x] Every deadline a future date and flagged provisional (DATA-06).
 - [x] 30 new guard tests; suite 261 → 292.
+
+---
+
+#### UI-01 — Tabs were the product architecture
+**Area:** `app.py`, `styles/components.css` · **Priority:** P0 · **Status:** **DONE** · **Spec:** V3 §45.3, §12
+
+`st.tabs` at the top level was the loudest Streamlit fingerprint in the app: it
+announced the framework before the user read a word, and it made three screens
+with genuinely different jobs look like three drawers of one page.
+
+Screens are now driven by `st.session_state.section`, with the header carrying
+real navigation. The old header nav was anchor links — `#how` pointed at an id
+inside a tab panel that was not in the DOM until the tab was opened, so it had
+never worked.
+
+**Buttons, not `st.segmented_control`.** A segmented control lets a user
+deselect the active option, which for navigation means clicking the page you
+are on takes you somewhere undefined. Buttons also match the pattern the
+language switcher already uses.
+
+A side effect worth having: **first render fell from 1.16s to 1.05s**, because
+a tab strip renders every panel and hides the inactive ones. The Lens uploader
+was being built on the landing page on every rerun.
+
+Two things fell out of the change. The Lens card on the landing page said "use
+the 'Read an announcement' tab above" and had no button, unlike the other four
+path cards — it now navigates. And two Lens tests had been passing only because
+every tab rendered at once; they now stand on the screen the upload lives on,
+which is where a real user would be.
+
+- [x] No `st.tabs` at the top level; one screen renders per run.
+- [x] Navigation, deep links and start-over all carry the section.
+- [x] No copy in any language names a tab.
+
+---
+
+#### UI-02 — The verdict was inside an expander
+**Area:** `app.py` · **Priority:** P0 · **Status:** **DONE** · **Spec:** V3 §20, §18.2, §45.2
+
+Spec §20, verbatim: *"The eligibility result should not be buried inside an
+expander."* It was `expanded=highlight`, so the featured card did open by
+default — but an expander that starts open is still a disclosure control with a
+chevron and a click target, and it still reads as framework furniture around
+the one answer the user came for.
+
+The featured match now renders its scorecard inline with no expander at all.
+The other 29 keep the disclosure, which is what §45.2 actually permits: on card
+seven, the detail genuinely is secondary.
+
+Documents, source and help stay tabbed even on the featured card. They are
+reference material consulted one at a time, which is what a tab is for. The
+verdict is not, which is why it is no longer one of them.
+
+- [x] Exactly one featured match, at surface level 4 (§7).
+- [x] Disclosure count is always results − 1.
+
+---
+
+#### UI-03 — The hero decorated instead of demonstrating
+**Area:** `app.py`, `styles/components.css` · **Priority:** P0 · **Status:** **DONE** · **Spec:** V3 §13.2
+
+The spec asks for "a realistic miniature Sahulat experience" in place of the
+decorative SVG — opportunity card, match indicator, requirement status, next
+action.
+
+**The trap in that request is worth recording.** A hand-written example card
+would satisfy the spec exactly and be the only fabricated thing on the landing
+page of a product whose entire argument is that it does not fabricate. A judge
+asking "is that a real result?" is precisely where that argument breaks.
+
+So the preview screens the demo profile against the live catalogue through the
+real rules engine and renders whatever comes back — same verdict, same
+condition count, same next step a user would get. If the data changes, the hero
+changes. A test asserts the title belongs to a record actually on disk **and**
+is the match the engine ranks first. The caption says it is a real result.
+
+The deadline row is excluded: it is a property of the listing rather than of the
+person, it already has its own line, and "your information: today's date" reads
+as nonsense at preview size.
+
+- [x] Real record, asserted against the catalogue and the engine.
+- [x] Renders in English, Urdu and Roman Urdu.
+- [x] Cached per language; landing render still ~1.05s.
 
 ---
 
@@ -1986,6 +2072,8 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-12 | **UI-03** — the hero preview renders a real screening result, not a designed example card | The spec asked for a product demonstration in the hero. The obvious implementation is a mockup, which would be the one fabricated thing on the landing page of a product built on not fabricating. Running the real engine costs one cached screening pass and cannot drift from the truth | Claude |
+| 2026-09-12 | **UI-02** — only the featured match loses its expander, not all 30 | Spec 45.2 permits expanders for secondary information, and on card seven the detail genuinely is secondary. Unfolding all thirty would be the dashboard overload spec 4.6 warns about | Claude |
 | 2026-09-12 | **DATA-07** — unaskable gates (PMT score, pregnancy, religion) are stated as prose rather than approximated as fields | A proxy screened silently would report "eligible" against a rule the programme does not use. The honest version shows what can be checked and says on the card what cannot | Claude |
 | 2026-09-12 | **DATA-09** — `required_groups` added rather than reusing `priority_groups` as a gate | Overloading the advantage would have made every existing scholarship's priority list start excluding people. Separate field, opposite force, unanswered reads as a question and not a rejection | Claude |
 | 2026-09-12 | **DATA-04** — the Jobs catalogue records recruitment *streams*, not named vacancies | A named vacancy is true for about three weeks and then misleads. The eligibility rules behind a recurring stream are stable year to year, and the rules are what the engine screens on | Claude |
@@ -2045,6 +2133,8 @@ Append one line per completed piece of work.
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
 | 2026-09-12 | **DATA-02** | **Closed.** Waleed verified the eligibility figures and curated 7 more NAVTTC course records: catalogue 3 → **10, all verified**. Metadata (dates, confidence, disclaimers) completed; three `source_date` values were invalid (two in the future, one still `TODO-VERIFY`). |
+| 2026-09-12 | **UI-01/02/03** | **V3 visual spec, structural pass.** Top-level tabs replaced by stateful screens with real header navigation; featured match shows its verdict inline; hero renders a real screening result instead of a decorative SVG. First render 1.16s → **1.05s**. |
+| 2026-09-12 | TEST-04 | `tests/test_v3_visual.py` (17 tests), including an assertion that the hero preview is a real catalogue record and the engine's actual top match. Suite 318 → **335**. |
 | 2026-09-12 | **DATA-07** | **Public Assistance filled — no category is empty.** 10 records in `public_assistance.json` (BISP ×3, Bait-ul-Mal ×2, Himmat Card, Zakat Guzara, Sehat Sahulat, interest-free loan, EOBI). Catalogue 20 → **30**. Assistance got its own landing path. |
 | 2026-09-12 | DATA-09 | `required_groups` gate added: three-valued membership, OR semantics, only the three groups a profile can answer. |
 | 2026-09-12 | DATA-10 | `enrolment_is_continuous` splits "never closes" from "no date on record". New `LISTING_ALWAYS_OPEN` / `URGENCY_CONTINUOUS` and `match_urgency()`. |

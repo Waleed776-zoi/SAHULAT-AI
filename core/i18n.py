@@ -389,9 +389,17 @@ STRINGS: Dict[str, Dict[str, str]] = {
     "correct_deadline_hint": {"en": "Format: YYYY-MM-DD", "ur": "شکل: سال-مہینہ-دن"},
     "correct_none": {"en": "Not stated", "ur": "درج نہیں"},
     "path_start": {"en": "Start here", "ur": "یہاں سے شروع کریں"},
+    "hero_preview_alt": {
+        "en": "A preview of a Sahulat result: an opportunity, the conditions checked, "
+              "and the next step.",
+        "ur": "سہولت کے نتیجے کی جھلک: ایک موقع، جانچی گئی شرائط، اور اگلا قدم۔"},
+    "hero_preview_note": {
+        "en": "A real result from our catalogue, screened for the demo profile - not an "
+              "illustration.",
+        "ur": "یہ ہماری فہرست سے حقیقی نتیجہ ہے، نمونہ پروفائل پر جانچا گیا - کوئی تصویری نمونہ نہیں۔"},
     "home_upload_hint": {
-        "en": "Use the 'Read an announcement' tab above.",
-        "ur": "اوپر 'اعلان پڑھیں' والا ٹیب استعمال کریں۔"},
+        "en": "Opens the Sahulat Lens.",
+        "ur": "سہولت لینز کھولتا ہے۔"},
     "path_check_ad_body": {
         "en": "Found a poster, screenshot or PDF elsewhere? Have it read and screened.",
         "ur": "کہیں کوئی اشتہار، اسکرین شاٹ یا PDF ملا؟ اسے پڑھوا کر جانچ لیں۔"},
