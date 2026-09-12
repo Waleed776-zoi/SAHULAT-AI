@@ -46,6 +46,7 @@ CHECK_GENDER = "gender"
 CHECK_ENGLISH = "english"
 CHECK_COMPUTER = "computer"
 CHECK_FIELD_OF_STUDY = "field_of_study"
+CHECK_REQUIRED_GROUP = "required_group"
 
 
 # ---------------------------------------------------------------------------
@@ -83,10 +84,26 @@ PROVINCES = (
 LISTING_OPEN = "open"            # a real future deadline is on record
 LISTING_CLOSED = "closed"        # a real deadline that has passed
 LISTING_VERIFY = "verify_cycle"  # no deadline on record - do not claim it is open
+# Enrolment never closes: applications are taken any day of the year. This is
+# NOT the same as LISTING_VERIFY. Both have no date, but one means "nothing to
+# miss" and the other means "we do not know" - opposite instructions to a user,
+# so they never share a label.
+LISTING_ALWAYS_OPEN = "always_open"
 
 # Groups a programme may give priority to. Data-driven: a record must state
 # these explicitly in `priority_groups` - they are never inferred from prose.
 PRIORITY_GROUPS = ("female", "disability", "orphan", "minority", "under_served_district")
+
+# Which profile answer decides membership of a group. Only these three can be
+# screened: nothing in a non-identifying profile establishes religion or
+# district, so `minority` and `under_served_district` stay advantage-only and
+# can never be used as a gate.
+GROUP_PROFILE_FIELD = {
+    "female": "gender",
+    "disability": "has_disability",
+    "orphan": "is_orphan",
+}
+GATEABLE_GROUPS = tuple(GROUP_PROFILE_FIELD)
 
 
 def rank_in(vocabulary_rank: Dict[str, int], value: Optional[str]) -> int:
@@ -163,6 +180,27 @@ class UserProfile:
         """True once the minimum needed for a meaningful result is answered."""
         return not self.missing_required_fields()
 
+    def group_membership(self, group: str) -> Optional[bool]:
+        """
+        Whether this profile belongs to `group` - True, False, or None for
+        "the question behind it was never answered".
+
+        Three-valued on purpose. priority_group_memberships() below collapses
+        None and False together, which is correct for an advantage: a bonus you
+        cannot evidence is simply a bonus you do not get. A gate has to tell
+        them apart, because "not an orphan" is a rejection and "did not say"
+        is a question.
+        """
+        field_name = GROUP_PROFILE_FIELD.get(group)
+        if field_name is None:
+            return None                     # nothing in the profile answers it
+        value = getattr(self, field_name, None)
+        if value is None:
+            return None
+        if group == "female":
+            return value == "female"
+        return bool(value)
+
     def priority_group_memberships(self) -> List[str]:
         """Which priority groups this profile belongs to, from answered fields."""
         memberships = []
@@ -193,6 +231,9 @@ class EligibilityConditions:
     special_quota_note: Optional[str] = None
     min_experience_years: Optional[float] = None
     application_deadline: Optional[str] = None          # YYYY-MM-DD
+    # True when the programme takes applications all year and there is no
+    # closing date to miss - distinct from simply having no date on record.
+    enrolment_is_continuous: bool = False
     # True when the date above is a stand-in for a cycle that has not been
     # announced yet, rather than a date an authority has published. A deadline
     # renders as a countdown - the most confident statement on the page - so
@@ -205,6 +246,10 @@ class EligibilityConditions:
     fields_of_study: Optional[List[str]] = None
     # Advantages, not gates: never used to exclude anyone.
     priority_groups: Optional[List[str]] = None
+    # Gates, unlike the line above. Groups the programme is RESTRICTED to - a
+    # disability stipend, an orphans' home. Read as OR: any one of them
+    # qualifies. Only GATEABLE_GROUPS can appear here.
+    required_groups: Optional[List[str]] = None
 
 
 def _is_placeholder(value: Optional[str]) -> bool:
@@ -296,12 +341,14 @@ class Opportunity:
             special_quota_note=ec.get("special_quota_note"),
             min_experience_years=ec.get("min_experience_years"),
             application_deadline=ec.get("application_deadline"),
+            enrolment_is_continuous=bool(ec.get("enrolment_is_continuous", False)),
             deadline_is_provisional=bool(ec.get("deadline_is_provisional", False)),
             gender_required=ec.get("gender_required"),
             min_english_level=ec.get("min_english_level"),
             min_computer_skills=ec.get("min_computer_skills"),
             fields_of_study=ec.get("fields_of_study"),
             priority_groups=ec.get("priority_groups"),
+            required_groups=ec.get("required_groups"),
         )
         return Opportunity(
             opportunity_id=d["opportunity_id"],
@@ -356,6 +403,7 @@ class MatchResult:
     listing_closed: bool = False
     deadline: Optional[str] = None
     deadline_is_provisional: bool = False
+    always_open: bool = False
     # Priority groups this profile matches. Advantages only - never a gate.
     matched_priority_groups: List[str] = field(default_factory=list)
 
@@ -378,6 +426,10 @@ class MatchResult:
             return LISTING_CLOSED
         if self.deadline and parse_iso_date(self.deadline):
             return LISTING_OPEN
+        if self.always_open:
+            # Checked after a real deadline, never before: if a record somehow
+            # carries both, the date is the more specific claim and wins.
+            return LISTING_ALWAYS_OPEN
         return LISTING_VERIFY
 
     def confidence_ratio(self) -> float:

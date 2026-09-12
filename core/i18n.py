@@ -21,7 +21,7 @@ from core.models import (
     CHECK_AGE, CHECK_DOMICILE, CHECK_EDUCATION, CHECK_MARKS, CHECK_INCOME,
     CHECK_ENROLLMENT, CHECK_EXISTING_SCHOLARSHIP, CHECK_EMPLOYMENT,
     CHECK_EXPERIENCE, CHECK_DEADLINE, CHECK_GENDER, CHECK_ENGLISH,
-    CHECK_COMPUTER, CHECK_FIELD_OF_STUDY,
+    CHECK_COMPUTER, CHECK_FIELD_OF_STUDY, CHECK_REQUIRED_GROUP,
 )
 
 LANG_EN = "en"
@@ -375,6 +375,7 @@ STRINGS: Dict[str, Dict[str, str]] = {
     "path_scholarship": {"en": "Find a scholarship", "ur": "اسکالرشپ تلاش کریں"},
     "path_job": {"en": "Find a job", "ur": "نوکری تلاش کریں"},
     "path_skills": {"en": "Learn a skill", "ur": "ہنر سیکھیں"},
+    "path_assistance": {"en": "Find support", "ur": "مدد تلاش کریں"},
     "path_check_ad": {"en": "Check an advertisement", "ur": "اشتہار کی جانچ کریں"},
     "correct_heading": {"en": "Correct what was read", "ur": "پڑھی گئی معلومات درست کریں"},
     "correct_note": {
@@ -590,6 +591,16 @@ STRINGS: Dict[str, Dict[str, str]] = {
 
     # ================= provisional deadlines (DATA-02) ====================
     "deadline_provisional_badge": {"en": "Provisional date", "ur": "عارضی تاریخ"},
+
+    # ========== always-open enrolment (DATA-07) ==========
+    "listing_always_open": {"en": "Always open", "ur": "ہمیشہ کھلا"},
+    "urgency_continuous": {"en": "No closing date", "ur": "کوئی آخری تاریخ نہیں"},
+    "urgency_continuous_note": {
+        "en": "This programme accepts applications all year round. There is no deadline to "
+              "miss - but being accepted still depends on the conditions above, and on funds "
+              "being available when you apply.",
+        "ur": "یہ پروگرام سارا سال درخواستیں قبول کرتا ہے۔ کوئی آخری تاریخ نہیں جو نکل جائے - "
+              "لیکن منظوری کا انحصار اوپر دی گئی شرائط اور درخواست کے وقت فنڈز کی دستیابی پر ہے۔"},
     "deadline_provisional_note": {
         "en": "This date is our placeholder for the expected cycle, not a date the authority "
               "has announced. Treat the countdown as indicative and confirm on the official page.",
@@ -1224,6 +1235,8 @@ _CHECK_TITLES = {
                    "ur_roman": "Computer hunar"},
     CHECK_FIELD_OF_STUDY: {"en": "Field of study", "ur": "شعبہ تعلیم",
                    "ur_roman": "Taleemi shoba"},
+    CHECK_REQUIRED_GROUP: {"en": "Who this is for", "ur": "یہ کن کے لیے ہے",
+                   "ur_roman": "Yeh kin ke liye hai"},
 }
 
 _REQUIRED_WORD = {"en": "Required", "ur": "درکار", "ur_roman": "Zaroori"}
@@ -1240,6 +1253,8 @@ _MUST_BE_ENROLLED = {"en": "must be enrolled", "ur": "داخلہ ضروری ہے
 _MUST_NOT_BE_ENROLLED = {"en": "must not be enrolled", "ur": "داخلہ نہیں ہونا چاہیے", "ur_roman": "enrolled nahi hona chahiye"}
 _NO_OTHER_SCHOLARSHIP = {"en": "must not hold another scholarship", "ur": "کوئی اور اسکالرشپ نہیں ہونی چاہیے", "ur_roman": "koi aur scholarship nahi honi chahiye"}
 _NO_RESTRICTION = {"en": "no restriction", "ur": "کوئی پابندی نہیں", "ur_roman": "koi pabandi nahi"}
+_NONE_OF_THESE = {"en": "none of these", "ur": "ان میں سے کوئی نہیں",
+                  "ur_roman": "in mein se koi nahi"}
 
 
 def _w(table: Dict[str, str], lang: str) -> str:
@@ -1302,6 +1317,14 @@ def _requirement_text(check: ConditionCheck, lang: str) -> str:
     if key == CHECK_FIELD_OF_STUDY and isinstance(req, list):
         return join_list([field_of_study_label(f, lang) for f in req], lang)
 
+    if key == CHECK_REQUIRED_GROUP and isinstance(req, list):
+        # Several groups are an OR, so they are joined as alternatives rather
+        # than as a list of things the person must all be. No "only for"
+        # prefix: the check title already says "Who this is for", and the
+        # scorecard puts this in a Requirement column where the prefix would
+        # read twice.
+        return join_list([priority_group_label(g, lang) for g in req], lang)
+
     return "\u2014" if req is None else str(req)
 
 
@@ -1334,6 +1357,13 @@ def _actual_text(check: ConditionCheck, lang: str) -> str:
         return computer_label(actual, lang, short=True)
     if key == CHECK_FIELD_OF_STUDY:
         return field_of_study_label(actual, lang)
+    if key == CHECK_REQUIRED_GROUP:
+        # An empty list is a real answer - "you told us, and it is none of
+        # them" - which is why it is checked before the falsy-value shortcut.
+        if isinstance(actual, list):
+            return (join_list([priority_group_label(g, lang) for g in actual], lang)
+                    if actual else _w(_NONE_OF_THESE, lang))
+        return str(actual)
     return str(actual)
 
 
@@ -1461,7 +1491,11 @@ def describe_urgency(urgency: str, days=None, lang: str = "en"):
     """
     label = t(f"urgency_{urgency}", lang)
     if days is None:
-        return label, t("urgency_unknown_note", lang) if urgency == "unknown" else ""
+        if urgency == "unknown":
+            return label, t("urgency_unknown_note", lang)
+        if urgency == "continuous":
+            return label, t("urgency_continuous_note", lang)
+        return label, ""
     if days < 0:
         return label, t("days_since_passed", lang, days=abs(days))
     if days == 0:

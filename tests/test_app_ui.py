@@ -13,7 +13,8 @@ from unittest import mock
 
 from streamlit.testing.v1 import AppTest
 
-from core.data_loader import category_counts, load_all_opportunities
+from core.data_loader import (KNOWN_CATEGORIES, category_counts,
+                              load_all_opportunities)
 from core.i18n import t
 
 APP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
@@ -493,10 +494,23 @@ class TestV2Landing(unittest.TestCase):
         cls.app = launch()
         cls.body = " ".join(str(m.value) for m in cls.app.markdown)
 
-    def test_four_paths_including_the_lens(self):
+    def test_every_category_has_a_path_plus_the_lens(self):
+        """
+        One card per category and one for the Lens. Public assistance joined
+        the row when its records landed: a category with data and no way in
+        from the landing page is reachable only by someone who already knows
+        to go looking for it.
+        """
         for label in ("Find a scholarship", "Find a job", "Learn a skill",
-                      "Check an advertisement"):
+                      "Find support", "Check an advertisement"):
             self.assertIn(label, self.body)
+
+    def test_a_path_preselects_its_own_category(self):
+        app = launch()
+        app.button(key="path_assistance").click().run()
+        # AppTest.exception is an (possibly empty) ElementList, never None.
+        self.assertFalse(app.exception, [str(e.value) for e in app.exception])
+        self.assertEqual(app.session_state["categories"], ["assistance"])
 
     def test_path_availability_follows_the_catalogue(self):
         """
@@ -509,7 +523,7 @@ class TestV2Landing(unittest.TestCase):
         tested, and it holds whichever categories happen to be filled.
         """
         counts = category_counts(load_all_opportunities())
-        for category in ("scholarship", "job", "skills"):
+        for category in KNOWN_CATEGORIES:
             button = [b for b in self.app.button if b.key == f"path_{category}"]
             self.assertTrue(button, f"no landing path rendered for {category}")
             self.assertEqual(
@@ -518,18 +532,32 @@ class TestV2Landing(unittest.TestCase):
                 f"{button[0].disabled}",
             )
 
-    def test_empty_category_is_labelled_not_hidden(self):
+    def test_every_category_is_shown_with_its_real_count(self):
         """
-        DATA-03: a category with nothing in it is shown saying so, rather than
-        quietly dropped - the catalogue being thin is a fact about the data,
-        not a feature to hide. Public assistance is still empty, so it is the
-        category that proves the behaviour.
+        DATA-03, restated now that no category is empty.
+
+        The original rule was that a category with nothing in it says so
+        rather than vanishing, and it was tested against Public Assistance
+        because that was the empty one. Filling it (DATA-07) left nothing
+        empty, so the assertion is now the general form: every known category
+        appears by name, and one that has records advertises the count rather
+        than "Coming soon". The count-to-label mapping is the rule; which
+        categories happen to be full is data.
         """
         counts = category_counts(load_all_opportunities())
-        self.assertEqual(counts["assistance"], 0,
-                         "update this test once assistance records exist")
-        self.assertIn(t("category_assistance", "en"), self.body)
-        self.assertIn(t("coming_soon", "en"), self.body)
+        for category in KNOWN_CATEGORIES:
+            self.assertIn(t(f"category_{category}", "en"), self.body,
+                          f"{category} is not shown on the landing page")
+            if counts[category]:
+                self.assertIn(t("available_count", "en", n=counts[category]), self.body,
+                              f"{category} has {counts[category]} records but does not "
+                              f"advertise them")
+
+    def test_nothing_is_labelled_coming_soon_while_every_category_has_records(self):
+        counts = category_counts(load_all_opportunities())
+        self.assertTrue(all(counts[c] for c in KNOWN_CATEGORIES),
+                        "a category is empty again - restore the 'Coming soon' assertion")
+        self.assertNotIn(t("coming_soon", "en"), self.body)
 
     def test_benefits_row_is_present(self):
         self.assertIn("sa-benefit", self.body)

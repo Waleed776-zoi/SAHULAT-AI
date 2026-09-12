@@ -25,6 +25,7 @@ URGENCY_IMMINENT = "imminent"    # days left, and few of them
 URGENCY_SOON = "soon"            # inside a fortnight
 URGENCY_PLENTY = "plenty"        # further out
 URGENCY_UNKNOWN = "unknown"      # no deadline on record - do NOT read as "plenty"
+URGENCY_CONTINUOUS = "continuous"  # enrolment never closes - nothing to miss
 
 IMMINENT_DAYS = 3
 SOON_DAYS = 14
@@ -71,6 +72,25 @@ def days_remaining(deadline: Optional[str], today: Optional[date] = None) -> Opt
 def is_expired(deadline: Optional[str], today: Optional[date] = None) -> bool:
     """True only when a real date has passed. Unknown is never 'expired'."""
     return deadline_urgency(deadline, today) == URGENCY_PASSED
+
+
+def match_urgency(match, today: Optional[date] = None) -> str:
+    """
+    Deadline state for a whole result, which is where "always open" lives.
+
+    deadline_urgency() sees only a date string, so it cannot separate a
+    programme that never closes from one whose date we simply do not have.
+    Both arrive as "no date", and they are opposite instructions: the first
+    needs nothing from the user today, the second needs them to go and check.
+
+    A real deadline still wins. If a record carries both a date and the
+    continuous flag, the date is the more specific claim.
+    """
+    if getattr(match, "deadline", None) and parse_iso_date(match.deadline):
+        return deadline_urgency(match.deadline, today)
+    if getattr(match, "always_open", False):
+        return URGENCY_CONTINUOUS
+    return deadline_urgency(match.deadline, today)
 
 
 def record_freshness(opportunity: Opportunity, today: Optional[date] = None) -> str:

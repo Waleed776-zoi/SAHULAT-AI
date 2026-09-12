@@ -40,8 +40,9 @@ from core.models import (
     CHECK_AGE, CHECK_DOMICILE, CHECK_EDUCATION, CHECK_MARKS, CHECK_INCOME,
     CHECK_ENROLLMENT, CHECK_EXISTING_SCHOLARSHIP, CHECK_EMPLOYMENT,
     CHECK_EXPERIENCE, CHECK_DEADLINE, CHECK_GENDER, CHECK_ENGLISH,
-    CHECK_COMPUTER, CHECK_FIELD_OF_STUDY,
+    CHECK_COMPUTER, CHECK_FIELD_OF_STUDY, CHECK_REQUIRED_GROUP,
     EDUCATION_RANK, ENGLISH_RANK, COMPUTER_RANK, rank_in,
+    GROUP_PROFILE_FIELD,
 )
 
 
@@ -263,6 +264,35 @@ def evaluate(profile: UserProfile, opportunity: Opportunity,
                                      required=list(ec.fields_of_study),
                                      actual=profile.field_of_study))
 
+    # --- required group membership -----------------------------------------
+    # A GATE, unlike the priority groups further down. Some assistance is
+    # restricted by circumstance rather than by qualification: a disability
+    # stipend, an orphans' home. Without a gate the engine would tell every
+    # applicant they qualify for both.
+    #
+    # Several groups read as OR - "for orphans and children with disabilities"
+    # admits anyone in either. AND would be the stricter reading, and stricter
+    # is the dangerous direction to guess in.
+    if not ec.required_groups:
+        checks.append(ConditionCheck(CHECK_REQUIRED_GROUP, NOT_APPLICABLE))
+    else:
+        wanted = [str(g).strip().lower() for g in ec.required_groups]
+        memberships = [profile.group_membership(g) for g in wanted]
+        belongs = [g for g, m in zip(wanted, memberships) if m is True]
+        if belongs:
+            status, actual = MET, belongs
+        elif any(m is None for m in memberships):
+            # Unanswered is a question, not a rejection: ask rather than refuse.
+            status, actual = UNKNOWN, None
+            for group, member in zip(wanted, memberships):
+                field_name = GROUP_PROFILE_FIELD.get(group)
+                if member is None and field_name and field_name not in missing:
+                    missing.append(field_name)
+        else:
+            status, actual = UNMET, []
+        checks.append(ConditionCheck(CHECK_REQUIRED_GROUP, status,
+                                     required=wanted, actual=actual))
+
     # --- roll up the PROFILE-BASED status (deadline excluded on purpose) ---
     statuses = [c.status for c in checks]
     if UNMET in statuses:
@@ -311,6 +341,7 @@ def evaluate(profile: UserProfile, opportunity: Opportunity,
         listing_closed=listing_closed,
         deadline=deadline_value,
         deadline_is_provisional=ec.deadline_is_provisional,
+        always_open=ec.enrolment_is_continuous,
         matched_priority_groups=matched_groups,
     )
 

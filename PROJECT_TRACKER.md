@@ -54,10 +54,10 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **292/292 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
-| Data loader | Loads **20** opportunities: 2 scholarship, 10 job, 8 skills, 0 assistance |
+| Unit tests | **318/318 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Data loader | Loads **30** opportunities: 2 scholarship, 10 job, 8 skills, 10 assistance. **No category is empty.** |
 | Job records loaded | **10** — `government_jobs.json`, curated 2026-09-12, all marked verified. Every record carries a future provisional deadline |
-| Assistance records loaded | **0** — the category is still shown as "Coming soon" |
+| Assistance records loaded | **10** — `public_assistance.json`, curated 2026-09-12. All continuous-enrolment; two are gated on `required_groups` |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
 | Embedding model | `paraphrase-multilingual-MiniLM-L12-v2` cached locally, but semantic search is now **opt-in** (`SAHULAT_SEMANTIC_SEARCH=1`); keyword search is the default |
 | First render | **1.16s**, with no torch/sentence-transformers/chromadb imported at page load (was ~30–35s) |
@@ -107,7 +107,9 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | DATA-05 | Concatenated JSON silently dropped 8 records from the catalogue | `data_loader.py` | **P0** | **DONE** | — |
 | DATA-06 | Provisional deadlines must not render as announced dates | `models.py` + `app.py` | **P1** | **DONE** | — |
 | DATA-04 | Jobs category was empty: curate a real jobs catalogue | data + tests | **P1** | **DONE** | — |
-| DATA-07 | Public Assistance category is still empty | data | **P2** | TODO | — |
+| DATA-07 | Public Assistance category is still empty | data | **P2** | **DONE** | — |
+| DATA-09 | Restricted programmes had no gate: `priority_groups` is advantage-only | `models.py` + `rules_engine.py` | **P1** | **DONE** | — |
+| DATA-10 | "Never closes" and "no date on record" shared one label | `models.py` + `timeliness.py` | **P1** | **DONE** | — |
 | BUG-03 | Zero income / zero marks silently become "not provided" | `app.py` | **P1** | **DONE** | — |
 | BUG-04 | Expired deadline reported as user ineligibility | `rules_engine.py` | **P1** | **DONE** | — |
 | I18N-01 | `name_ur` / `summary_ur` exist in data but are never displayed | `app.py` | **P1** | **DONE** | — |
@@ -490,24 +492,113 @@ keep the **Provisional date** badge beside the countdown.
 
 ---
 
-#### DATA-07 — Public Assistance is still empty
-**Area:** data · **Priority:** P2 · **Status:** TODO
+#### DATA-07 — Public Assistance
+**Area:** `data/opportunities/public_assistance.json`, `models.py`, `rules_engine.py`, `timeliness.py`, `app.py` · **Priority:** P2 · **Status:** **DONE**
 
-The last empty category: BISP, Bait-ul-Mal, Ehsaas and the provincial
-equivalents. It has no landing path of its own, so the only visible effect is
-the "Coming soon" chip on the home page — which is why it sits below DATA-04
-rather than beside it.
+The last empty category, now **10 records**: the three BISP programmes
+(Kafaalat, Taleemi Wazaif, Nashonuma), two from Pakistan Bait-ul-Mal
+(Individual Financial Assistance, Sweet Homes), Punjab's Himmat Card, the Zakat
+Guzara Allowance, Sehat Sahulat, an interest-free loan scheme, and the EOBI
+old-age pension. **No category in the catalogue is empty any more**, and
+Public Assistance got a landing path of its own — a category with records and
+no way in from the home page is reachable only by someone who already knows to
+look for it.
 
-Worth noting that this category screens differently from the other three.
-Assistance is means-tested on household circumstances rather than on
-qualifications, so `max_monthly_household_income`, `is_orphan` and
-`has_disability` carry the decisions while `min_education_level` and
-`min_experience_years` sit unused. The existing conditions cover it; no engine
-work is expected.
+**The prediction in the original ticket was wrong**
 
-- [ ] Curate 4-6 records with the same honesty rules as DATA-04.
-- [ ] Confirm the scorecard reads sensibly when the deciding conditions are
-      circumstances rather than qualifications.
+This entry previously said "the existing conditions cover it; no engine work is
+expected." That held right up until the records were actually written, at which
+point assistance turned out to screen on an axis the model could not express.
+A scholarship asks what you have achieved. Assistance asks what has happened to
+you — and two of those questions had nowhere to live. Both are now tracked
+separately as DATA-09 and DATA-10.
+
+**What could NOT be modelled, and is handled as prose instead**
+
+Three records turn on facts a non-identifying profile must never hold:
+
+| Record | Real gate | Why it cannot be a field |
+|---|---|---|
+| BISP Kafaalat | PMT poverty score from the NSER survey | Derived from a household asset survey; no profile answer approximates it |
+| Benazir Nashonuma | Pregnancy or breastfeeding | Health information — Invariant 2 |
+| Zakat Guzara Allowance | Applicant is a Muslim *mustahiq* | Religion — never asked, ever |
+
+The income condition on the BISP records is **our approximation, not the
+programme's rule**, and each record says exactly that in the words the card
+displays. The alternative — screening silently on a proxy and reporting
+"eligible" — would be the most confident wrong answer in the product. A test
+asserts each of these records names its own unaskable condition in prose.
+
+The Zakat record additionally points non-Muslim applicants at Bait-ul-Mal,
+which is funded from general revenue and carries no such restriction. A
+screening tool that can only say "not eligible" to that user is failing them.
+
+**One record creates a debt**
+
+The interest-free loan sits beside nine grants. Presenting it without saying so
+would be the most consequential omission in the catalogue, so it is called out
+in the note, in the disclaimer, and in a test.
+
+- [x] 10 records, screening and rendering in all three languages.
+- [x] Every category now has a landing path and a non-zero count.
+- [x] 24 new guard tests; suite 292 → 318.
+
+---
+
+#### DATA-09 — A restricted programme had no way to restrict
+**Area:** `core/models.py`, `core/rules_engine.py` · **Priority:** P1 · **Status:** **DONE**
+
+`priority_groups` is advantage-only **by design** — it can help an application
+and never excludes anyone, which is right for a scholarship that favours women.
+It is wrong for an orphans' home or a disability stipend, where the group *is*
+the eligibility. With only the advantage available, the engine told every
+applicant they qualified for Pakistan Sweet Homes and the Himmat Card.
+
+`required_groups` is the gate. Same vocabulary, opposite force, read as **OR**:
+"for orphans and persons with disabilities" admits anyone in either. AND would
+be the stricter reading, and stricter is the dangerous direction to guess in —
+it turns a wrongly-narrow record into a wrongly-refused person.
+
+**Membership is three-valued**, which is the part that matters. `None` means
+the question behind it was never answered, and that produces UNKNOWN — a
+question — not UNMET, a rejection. `priority_group_memberships()` collapses
+None and False together because a bonus you cannot evidence is simply a bonus
+you do not get; a gate has to tell them apart.
+
+Only `female`, `disability` and `orphan` can be gated on. Nothing in a
+non-identifying profile establishes religion or district, so `minority` and
+`under_served_district` stay advantage-only — gating on one would create an
+UNKNOWN no user could ever resolve. A test enforces this.
+
+- [x] Three-valued membership, OR semantics, rendered in all three languages.
+- [x] Ungateable groups rejected by test.
+
+---
+
+#### DATA-10 — "Never closes" and "we have no date" shared one label
+**Area:** `core/models.py`, `core/timeliness.py`, `app.py` · **Priority:** P1 · **Status:** **DONE**
+
+Assistance is overwhelmingly rolling — BISP, Sehat Card and Bait-ul-Mal take
+applications any day of the year. With no deadline on record all ten rendered
+"No deadline on record — do not read as plenty of time", which is the right
+answer when a date is missing and the wrong one when there is no date to miss.
+
+The two are opposite instructions: one tells the user to go and check, the
+other tells them there is nothing to check. `enrolment_is_continuous` splits
+them, giving a new `LISTING_ALWAYS_OPEN` state and `URGENCY_CONTINUOUS`.
+
+`match_urgency()` was added alongside `deadline_urgency()` because the old
+function only ever sees a date string and therefore *cannot* tell the two
+apart. A real deadline still outranks the flag: if a record carries both, the
+date is the more specific claim and the user sees the countdown.
+
+The always-open note deliberately does not stop at "no deadline". It adds that
+acceptance still depends on the conditions above and on funds being available —
+because for a rolling programme, "always open" is exactly the phrase a reader
+could mistake for "always granted".
+
+- [x] New listing state and urgency state, in all three languages.
+- [x] A deadline beats the flag; a closed deadline beats both.
 
 ---
 
@@ -1851,7 +1942,7 @@ Phases, not deadlines. Each phase should leave the app in a demonstrable state.
 *Exit criteria: `streamlit run` to an interactive form in under ~5s, with wifi disabled.*
 
 **Phase 2 — Truth** ⚠️ PARTIAL — `DATA-02` (verify the real numbers) is the one blocker left; it needs a human with the official sources
-`DATA-02` (verify the numbers) → `DATA-03` (jobs: fill or flag) → `DATA-04` (jobs: filled) → `OPS-02` (model name) → `OPS-01` (Gemini error handling). `DATA-07` (public assistance) is the last empty category.
+`DATA-02` (verify the numbers) → `DATA-03` (jobs: fill or flag) → `DATA-04` (jobs: filled) → `OPS-02` (model name) → `OPS-01` (Gemini error handling). `DATA-07` (public assistance) closed the last empty category.
 *Exit criteria: nothing shown to a user is unverified or capable of crashing the page.*
 
 **Phase 3 — Deliver the bilingual promise** ✅ DONE
@@ -1895,6 +1986,8 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-12 | **DATA-07** — unaskable gates (PMT score, pregnancy, religion) are stated as prose rather than approximated as fields | A proxy screened silently would report "eligible" against a rule the programme does not use. The honest version shows what can be checked and says on the card what cannot | Claude |
+| 2026-09-12 | **DATA-09** — `required_groups` added rather than reusing `priority_groups` as a gate | Overloading the advantage would have made every existing scholarship's priority list start excluding people. Separate field, opposite force, unanswered reads as a question and not a rejection | Claude |
 | 2026-09-12 | **DATA-04** — the Jobs catalogue records recruitment *streams*, not named vacancies | A named vacancy is true for about three weeks and then misleads. The eligibility rules behind a recurring stream are stable year to year, and the rules are what the engine screens on | Claude |
 | 2026-09-12 | **DATA-04** — job records were marked verified after shipping as `needs_recheck` | Claude's position was that the badge should follow the check. Waleed's call, as owner of the data and of the demo: a half-red catalogue reads as unfinished, and the cross-check belongs after the data stops moving. Recorded here because it is a deliberate reversal, not an oversight - the guard requiring real dates behind a badge stays in force | Waleed |
 | 2026-09-12 | **DATA-02** — deadlines were supplied, but flagged rather than asserted | The user asked for demo-suitable dates and that is reasonable for a prototype. A countdown is the most confident element on the page, so the honest version is to show it *and* say the date is ours. One boolean flips when a cycle is announced | Claude |
@@ -1952,6 +2045,10 @@ Append one line per completed piece of work.
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
 | 2026-09-12 | **DATA-02** | **Closed.** Waleed verified the eligibility figures and curated 7 more NAVTTC course records: catalogue 3 → **10, all verified**. Metadata (dates, confidence, disclaimers) completed; three `source_date` values were invalid (two in the future, one still `TODO-VERIFY`). |
+| 2026-09-12 | **DATA-07** | **Public Assistance filled — no category is empty.** 10 records in `public_assistance.json` (BISP ×3, Bait-ul-Mal ×2, Himmat Card, Zakat Guzara, Sehat Sahulat, interest-free loan, EOBI). Catalogue 20 → **30**. Assistance got its own landing path. |
+| 2026-09-12 | DATA-09 | `required_groups` gate added: three-valued membership, OR semantics, only the three groups a profile can answer. |
+| 2026-09-12 | DATA-10 | `enrolment_is_continuous` splits "never closes" from "no date on record". New `LISTING_ALWAYS_OPEN` / `URGENCY_CONTINUOUS` and `match_urgency()`. |
+| 2026-09-12 | TEST-03 | `tests/test_assistance_catalogue.py` (24 tests). Suite 292 → **318**. Also fixed two tests that passed `"roman"` as a language code - it is `"ur_roman"`, so they had been silently asserting English three times. |
 | 2026-09-12 | DATA-08 | All 20 records marked verified with real `last_verified` and `source_date` values; catalogue renders 20/20 "Officially verified". "Checked 0 days ago" corrected to "Checked today" in all three languages. Suite → **292**. |
 | 2026-09-12 | **DATA-04** | **Jobs category filled.** 10 curated federal and provincial recruitment streams in `government_jobs.json`; the `REPLACE ME` skeleton file removed. Catalogue 10 → **20**. The landing path switched on with no code change. |
 | 2026-09-12 | TEST-02 | New `tests/test_jobs_catalogue.py` (26 tests). Guards every vocabulary field across the whole catalogue - the `min_computer_skills` prose bug and the province-string mismatch are now both impossible to reintroduce silently. Suite 261 → **288**. |
