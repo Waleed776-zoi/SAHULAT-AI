@@ -419,13 +419,14 @@ STRINGS: Dict[str, Dict[str, str]] = {
     "correct_none": {"en": "Not stated", "ur": "درج نہیں"},
     "path_start": {"en": "Start here", "ur": "یہاں سے شروع کریں"},
     "hero_preview_alt": {
-        "en": "A preview of a Sahulat result: an opportunity, the conditions checked, "
+        "en": "A preview of Sahulat results: an opportunity, the conditions checked, "
               "and the next step.",
-        "ur": "سہولت کے نتیجے کی جھلک: ایک موقع، جانچی گئی شرائط، اور اگلا قدم۔"},
+        "ur": "سہولت کے نتائج کی جھلک: ایک موقع، جانچی گئی شرائط، اور اگلا قدم۔"},
     "hero_preview_note": {
-        "en": "A real result from our catalogue, screened for the demo profile - not an "
-              "illustration.",
-        "ur": "یہ ہماری فہرست سے حقیقی نتیجہ ہے، نمونہ پروفائل پر جانچا گیا - کوئی تصویری نمونہ نہیں۔"},
+        "en": "Real results from our catalogue, screened for the demo profile - one from "
+              "each category, not an illustration.",
+        "ur": "یہ ہماری فہرست سے حقیقی نتائج ہیں، نمونہ پروفائل پر جانچے گئے - ہر زمرے سے ایک، "
+              "کوئی تصویری نمونہ نہیں۔"},
     "home_upload_hint": {
         "en": "Opens the Sahulat Lens.",
         "ur": "سہولت لینز کھولتا ہے۔"},

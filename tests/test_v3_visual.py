@@ -16,17 +16,34 @@ asserted to match a record that is actually in the catalogue.
 """
 from __future__ import annotations
 
+import io
+import os
 import re
 import unittest
 
 from streamlit.testing.v1 import AppTest
 
-from core.data_loader import load_all_opportunities
+from core.data_loader import KNOWN_CATEGORIES, load_all_opportunities
 from core.i18n import LANGUAGES, t
 from core.models import sample_profile
 from core.rules_engine import evaluate_all, top_matches
 
+import app as app_module
 from tests.test_app_ui import APP, at_results, launch
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _expected_rotation():
+    """The best real match in each category - what the hero should cycle."""
+    results = evaluate_all(sample_profile(), load_all_opportunities())
+    picks = []
+    for category in KNOWN_CATEGORIES:
+        best = top_matches([r for r in results
+                            if r.opportunity.category == category], limit=1)
+        if best:
+            picks.append(best[0])
+    return picks
 
 
 class TestScreensNotTabs(unittest.TestCase):
@@ -147,35 +164,35 @@ class TestHeroDemonstratesTheProduct(unittest.TestCase):
                      "sa-preview-row", "sa-preview-next"):
             self.assertIn(part, self.body, f"the preview has no {part}")
 
-    def test_the_preview_is_a_real_record_not_a_mockup(self):
+    def test_every_card_is_a_real_record_not_a_mockup(self):
         """
         The load-bearing assertion in this file.
 
         A fabricated example card would satisfy the spec and quietly contradict
-        the product. The title in the hero must belong to something actually in
-        the catalogue, and must be the match the engine actually ranks first
-        for the demo profile.
+        the product. Every title in the rotation must belong to something
+        actually in the catalogue, and must be the match the engine ranks first
+        within its own category for the demo profile.
         """
-        shown = re.search(r'sa-preview-title">([^<]+)<', self.body)
-        self.assertIsNotNone(shown, "no preview title rendered")
-        title = shown.group(1)
+        titles = re.findall(r'sa-preview-title">([^<]+)<', self.body)
+        self.assertTrue(titles, "no preview titles rendered")
 
         catalogue = {o.display_name("en") for o in load_all_opportunities()}
-        self.assertIn(title, catalogue,
-                      "the hero shows an opportunity that is not in the catalogue")
+        for title in titles:
+            self.assertIn(title, catalogue,
+                          f"the hero shows {title!r}, which is not in the catalogue")
 
-        ranked = top_matches(evaluate_all(sample_profile(), load_all_opportunities()),
-                             limit=1)
-        self.assertEqual(title, ranked[0].opportunity.display_name("en"),
-                         "the hero is not showing the engine's actual top match")
+        expected = [m.opportunity.display_name("en") for m in _expected_rotation()]
+        self.assertEqual(titles, expected,
+                         "the hero is not showing the engine's own per-category winners")
 
     def test_the_preview_counts_agree_with_the_engine(self):
-        ranked = top_matches(evaluate_all(sample_profile(), load_all_opportunities()),
-                             limit=1)
-        score = ranked[0].scorecard()
-        self.assertIn(t("scorecard_summary", "en",
-                        met=score["met"], total=score["total"]),
-                      self.body)
+        for match in _expected_rotation():
+            score = match.scorecard()
+            self.assertIn(t("scorecard_summary", "en",
+                            met=score["met"], total=score["total"]),
+                          self.body,
+                          f"{match.opportunity.opportunity_id} shows a count the "
+                          f"engine did not produce")
 
     def test_the_preview_says_it_is_real(self):
         captions = " ".join(str(c.value) for c in self.app.caption)
@@ -204,6 +221,92 @@ class TestHeroDemonstratesTheProduct(unittest.TestCase):
             self.assertFalse(app.exception, f"{lang}: {app.exception}")
             self.assertIn('class="sa-preview"', body, lang)
             self.assertIn(t("hero_preview_alt", lang), body, lang)
+
+
+class TestHeroRotation(unittest.TestCase):
+    """
+    The hero cycles through one real result per category.
+
+    This is a deliberate exception to the spec's own §40.5 ("avoid
+    continuously moving hero graphics") made at the owner's request, so the
+    safeguards around it are the part worth testing: no timer, no rerun, no
+    JavaScript, and a hard stop under reduced motion.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = launch()
+        cls.body = " ".join(str(m.value) for m in cls.app.markdown)
+        cls.css = io.open(os.path.join(ROOT, "styles", "animations.css"),
+                          encoding="utf-8").read()
+
+    def test_one_card_per_category_that_has_records(self):
+        slides = self.body.count('class="sa-preview-slide"')
+        self.assertEqual(slides, len(_expected_rotation()))
+        self.assertGreater(slides, 1, "nothing to rotate through")
+
+    def test_the_rotation_covers_every_category(self):
+        """
+        The engine's overall top six for the demo profile is five NAVTTC
+        courses. Rotating through those would be accurate and would imply the
+        catalogue holds nothing but courses.
+        """
+        shown = {m.opportunity.category for m in _expected_rotation()}
+        self.assertEqual(shown, set(KNOWN_CATEGORIES))
+
+    def test_cards_are_staggered_not_stacked_on_one_beat(self):
+        delays = sorted({float(d) for d in
+                         re.findall(r'animation-delay:([\d.]+)s', self.body)})
+        expected = [i * app_module.PREVIEW_SECONDS_PER_CARD
+                    for i in range(len(_expected_rotation()))]
+        self.assertEqual(delays, expected)
+
+    def test_a_dot_for_every_card(self):
+        self.assertEqual(self.body.count('<i style="animation-delay:'),
+                         self.body.count('class="sa-preview-slide"'))
+
+    def test_the_cycle_is_slow_enough_to_read(self):
+        """
+        The hero is read, not watched. A card has to stay long enough to take
+        in a title, a condition count and a next step.
+        """
+        self.assertGreaterEqual(app_module.PREVIEW_SECONDS_PER_CARD, 3.0)
+
+    def test_keyframes_are_generated_for_the_real_card_count(self):
+        css = app_module.preview_cycle_css(4, 4.0)
+        self.assertIn("@keyframes sa-preview-cycle", css)
+        self.assertIn("25.00%", css, "four cards should each hold a quarter of the cycle")
+        self.assertIn("16.0s", css, "four cards at four seconds is a sixteen second cycle")
+
+    def test_a_single_card_does_not_rotate(self):
+        """One record in the catalogue is a still hero, not a loop of one."""
+        self.assertEqual(app_module.preview_cycle_css(1, 4.0), "")
+
+    def test_nothing_reruns_or_sleeps_to_drive_the_rotation(self):
+        """
+        A rerun every four seconds would re-screen the catalogue and reset
+        every widget on the page. CSS moves the cards; Python renders them once.
+        """
+        source = io.open(os.path.join(ROOT, "app.py"), encoding="utf-8").read()
+        for banned in ("time.sleep", "st_autorefresh", "setInterval", "setTimeout"):
+            self.assertNotIn(banned, source, f"{banned} is driving the hero")
+
+    def test_reduced_motion_leaves_a_card_on_screen(self):
+        """
+        The safeguard that actually matters.
+
+        The blanket reduced-motion rule sets every animation to 1ms and one
+        iteration, which would park each card on its final keyframe - and that
+        keyframe is opacity 0. Without an explicit override the hero would go
+        BLANK, not merely still, for exactly the users who asked for less
+        movement.
+        """
+        block = self.css[self.css.index("prefers-reduced-motion"):]
+        self.assertIn(".sa-preview-slide", block)
+        self.assertIn("opacity: 1 !important", block)
+        self.assertIn("animation: none !important", block)
+        self.assertIn(":not(:first-child) { display: none; }", block)
+        self.assertIn(".sa-preview-dots { display: none !important; }", block)
 
 
 if __name__ == "__main__":

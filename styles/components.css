@@ -780,7 +780,20 @@ div[data-testid="stExpander"] summary { font-weight: 600; font-size: .92rem; }
   width: 8px; height: 8px; border-radius: 50%; background: var(--border-hover);
   opacity: .55;
 }
+/* All cards occupy one grid cell, so the frame sizes itself to the tallest
+   and nothing jumps at the handover. */
+.sa-preview-stack { display: grid; }
+.sa-preview-stack > .sa-preview-slide { grid-area: 1 / 1; }
 .sa-preview-body { padding: var(--s4) var(--s4) var(--s3); }
+
+/* Rotation dots, in the window chrome. The keyframes and the timing are
+   generated in app.preview_cycle_css() - their percentages depend on how many
+   categories actually have records. */
+.sa-preview-dots { display: flex; gap: 5px; margin-inline-start: auto; }
+.sa-preview-dots i {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--border-hover); opacity: .45;
+}
 .sa-preview-eyebrow {
   display: flex; align-items: center; justify-content: space-between; gap: var(--s3);
   font-size: .68rem; font-weight: 700; letter-spacing: .1em;

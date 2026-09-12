@@ -54,7 +54,7 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **351/351 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Unit tests | **360/360 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **30** opportunities: 2 scholarship, 10 job, 8 skills, 10 assistance. **No category is empty.** |
 | Job records loaded | **10** — `government_jobs.json`, curated 2026-09-12, all marked verified. Every record carries a future provisional deadline |
 | Assistance records loaded | **10** — `public_assistance.json`, curated 2026-09-12. All continuous-enrolment; two are gated on `required_groups` |
@@ -114,6 +114,7 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | UI-02 | The eligibility verdict sat inside an expander (V3 spec 20) | `app.py` | **P0** | **DONE** | — |
 | UI-03 | The hero decorated rather than demonstrated (V3 spec 13.2) | `app.py` | **P0** | **DONE** | — |
 | UI-04 | Every AI call but the Lens showed a wordless spinner | `app.py` | **P1** | **DONE** | — |
+| UI-05 | Hero preview cycles through one real result per category | `app.py` + CSS | **P2** | **DONE** | Waleed |
 | BUG-03 | Zero income / zero marks silently become "not provided" | `app.py` | **P1** | **DONE** | — |
 | BUG-04 | Expired deadline reported as user ineligibility | `rules_engine.py` | **P1** | **DONE** | — |
 | I18N-01 | `name_ur` / `summary_ur` exist in data but are never displayed | `app.py` | **P1** | **DONE** | — |
@@ -493,6 +494,50 @@ keep the **Provisional date** badge beside the countdown.
 - [x] 10 records, loading, screening, and rendering in all three languages.
 - [x] Every deadline a future date and flagged provisional (DATA-06).
 - [x] 30 new guard tests; suite 261 → 292.
+
+---
+
+#### UI-05 — The hero preview rotates
+**Area:** `app.py`, `styles/` · **Priority:** P2 · **Status:** **DONE** · **Requested by:** Waleed
+
+The hero showed one real screening result. It now cycles through four, one
+every four seconds, sliding upward at the handover.
+
+**This is a deliberate exception to the spec's own rules**, taken at the
+owner's request. V3 §40.5 says "avoid continuously moving hero graphics" and
+§13.3 says "after entrance, stop the animation". Recorded here rather than
+quietly done, because someone reading the spec later will otherwise think the
+hero is a bug. The mitigations: the cadence is slow (a card is still for 3.5 of
+its 4 seconds, so what is on screen is a settled card rather than a moving
+one), and reduced motion stops it dead.
+
+**Which records.** The engine's overall top six for the demo profile is five
+NAVTTC courses and one job — accurate, and a rotation that would imply the
+catalogue holds nothing but courses. The rotation instead takes the best real
+match in **each category**, so the hero demonstrates the whole product. Every
+card is still whatever the engine actually ranks first in its own category; a
+test asserts the four titles are exactly the per-category winners.
+
+**How it cycles: CSS, not reruns.** Streamlit has no way to repaint one element
+on a timer without rerunning the script, and a rerun every four seconds would
+re-screen the catalogue and reset every widget on the page. All four cards are
+rendered once into a single grid cell — so the frame sizes to the tallest and
+nothing jumps — and staggered CSS animations move between them. A test asserts
+no `time.sleep`, `st_autorefresh`, `setInterval` or `setTimeout` exists. The
+keyframes are generated in Python because their percentages depend on how many
+categories actually have records.
+
+**The reduced-motion trap, which is the real find here.** The blanket rule in
+`animations.css` sets every animation to 1ms and one iteration. Applied to a
+cycling card that would park it on its final keyframe — and that keyframe is
+`opacity: 0`. The hero would have gone **blank**, not merely still, for exactly
+the users who asked for less movement. There is now an explicit override:
+first card, visible, motionless, dots hidden.
+
+- [x] Four real results, one per category, asserted against the engine.
+- [x] No timer, no rerun, no JavaScript.
+- [x] Reduced motion leaves a readable card on screen.
+- [x] Landing render unchanged at ~1.0s (the extra screening costs 1.6ms).
 
 ---
 
@@ -2108,6 +2153,8 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-12 | **UI-05** — the hero animates continuously, against the V3 spec's own 40.5 and 13.3 | Waleed asked for it directly. Mitigated rather than argued: a slow cadence so each card reads as settled, and a hard stop under reduced motion. Logged so a later reader of the spec does not file it as a bug | Waleed |
+| 2026-09-12 | **UI-05** — the rotation shows one match per category, not the overall top four | The overall top four is three NAVTTC courses. Accurate, and it would advertise a catalogue of nothing but courses | Claude |
 | 2026-09-12 | **UI-03** — the hero preview renders a real screening result, not a designed example card | The spec asked for a product demonstration in the hero. The obvious implementation is a mockup, which would be the one fabricated thing on the landing page of a product built on not fabricating. Running the real engine costs one cached screening pass and cannot drift from the truth | Claude |
 | 2026-09-12 | **UI-02** — only the featured match loses its expander, not all 30 | Spec 45.2 permits expanders for secondary information, and on card seven the detail genuinely is secondary. Unfolding all thirty would be the dashboard overload spec 4.6 warns about | Claude |
 | 2026-09-12 | **DATA-07** — unaskable gates (PMT score, pregnancy, religion) are stated as prose rather than approximated as fields | A proxy screened silently would report "eligible" against a rule the programme does not use. The honest version shows what can be checked and says on the card what cannot | Claude |
@@ -2169,6 +2216,7 @@ Append one line per completed piece of work.
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
 | 2026-09-12 | **DATA-02** | **Closed.** Waleed verified the eligibility figures and curated 7 more NAVTTC course records: catalogue 3 → **10, all verified**. Metadata (dates, confidence, disclaimers) completed; three `source_date` values were invalid (two in the future, one still `TODO-VERIFY`). |
+| 2026-09-12 | **UI-05** | Hero preview cycles through four real results, one per category, on a 16s CSS loop. Reduced-motion override added — the blanket 1ms rule would have parked every card on an `opacity: 0` keyframe and blanked the hero. Suite 351 → **360**. |
 | 2026-09-12 | **UI-04** | Staged progress on all four remaining AI calls, replacing wordless spinners. Four labelled steps on the follow-up Ask, with pending steps dimmed and blurred. Suite 335 → **351**. |
 | 2026-09-12 | **UI-01/02/03** | **V3 visual spec, structural pass.** Top-level tabs replaced by stateful screens with real header navigation; featured match shows its verdict inline; hero renders a real screening result instead of a decorative SVG. First render 1.16s → **1.05s**. |
 | 2026-09-12 | TEST-04 | `tests/test_v3_visual.py` (17 tests), including an assertion that the hero preview is a real catalogue record and the engine's actual top match. Suite 318 → **335**. |

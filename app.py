@@ -257,56 +257,39 @@ def callout(body: str, title: str = "", tone: str = "") -> None:
                 unsafe_allow_html=True)
 
 
-@st.cache_data(show_spinner=False)
-def hero_preview(lang: str) -> str:
-    """
-    A miniature of a real result, for the hero (spec 13.2).
+# One card is shown for this long before the next slides in. Slow on purpose:
+# the hero is read, not watched, and a faster cycle would pull attention away
+# from the headline and the call to action beside it.
+PREVIEW_SECONDS_PER_CARD = 4.0
 
-    NOT a mockup. This screens the demo profile against the live catalogue and
-    renders the top match the engine actually returns - the same verdict, the
-    same condition count, the same next step the user would get. A fabricated
-    example card would be the one dishonest thing on the landing page of a
-    product that exists to not fabricate things.
 
-    Cached per language: it costs one screening pass, and the landing page is
-    the most re-rendered screen in the app.
-    """
-    results = evaluate_all(sample_profile(), get_opportunities())
-    ranked = top_matches(results, limit=1)
-    if not ranked:
-        return ""
-    match = ranked[0]
+def hero_preview_card(match, lang: str) -> str:
+    """One real screening result, rendered at preview size."""
     opportunity = match.opportunity
     score = match.scorecard()
 
     category = (t(f"category_{opportunity.category}", lang)
                 if opportunity.category in KNOWN_CATEGORIES else opportunity.category)
-    urgency = match_urgency(match)
-    days = days_remaining(match.deadline)
-    deadline_label, _ = describe_urgency(urgency, days, lang)
+    deadline_label, _ = describe_urgency(match_urgency(match),
+                                         days_remaining(match.deadline), lang)
 
     # Real condition rows, drawn from the checks the engine actually ran.
     # The deadline is excluded: it is a property of the listing rather than of
     # the person, it already has its own line above, and rendering it as
     # "your information: today's date" reads as nonsense at this size.
-    shown = [c for c in match.satisfied() + match.gaps() + match.blockers()
-             if c.key != CHECK_DEADLINE][:3]
     rows = ""
-    for check in shown:
-        title, requirement, actual, outcome = scorecard_row(check, lang)
+    for check in [c for c in match.satisfied() + match.gaps() + match.blockers()
+                  if c.key != CHECK_DEADLINE][:3]:
+        title, _required, actual, outcome = scorecard_row(check, lang)
         tone = {MET: "is-met", UNMET: "is-unmet"}.get(check.status, "is-unknown")
         rows += (f'<div class="sa-preview-row">'
                  f'<span class="sa-preview-req">{title}</span>'
                  f'<span class="sa-preview-you">{actual}</span>'
                  f'<span class="sa-preview-mark {tone}">{outcome}</span></div>')
 
-    ticked = set()
-    action = describe_next_action(next_action(match, ticked), lang)
+    action = describe_next_action(next_action(match, set()), lang)
 
     return (
-        f'<div class="sa-preview" role="img" '
-        f'aria-label="{t("hero_preview_alt", lang)}">'
-        f'<div class="sa-preview-chrome"><span></span><span></span><span></span></div>'
         f'<div class="sa-preview-body">'
         f'<div class="sa-preview-eyebrow">{category}'
         f'<span class="sa-preview-pill">{status_label(match.overall_status, lang)}</span>'
@@ -321,7 +304,104 @@ def hero_preview(lang: str) -> str:
         f'<div class="sa-preview-next">'
         f'<span class="sa-preview-next-label">{t("next_step_label", lang)}</span>'
         f'<span class="sa-preview-next-body">{action}</span></div>'
-        f'</div></div>'
+        f'</div>'
+    )
+
+
+def hero_preview_matches():
+    """
+    The best real match in each category, for the rotation.
+
+    Not the overall top six - for the demo profile that is five NAVTTC courses,
+    which is accurate and would imply the catalogue holds nothing else. One per
+    category shows the whole product, and each card is still whatever the
+    engine actually ranks first in its own category.
+    """
+    results = evaluate_all(sample_profile(), get_opportunities())
+    picks = []
+    for category in KNOWN_CATEGORIES:
+        best = top_matches([r for r in results
+                            if r.opportunity.category == category], limit=1)
+        if best:
+            picks.append(best[0])
+    return picks or top_matches(results, limit=1)
+
+
+def preview_cycle_css(count: int, seconds_each: float) -> str:
+    """
+    Keyframes for the rotation, generated because the percentages depend on
+    how many categories actually have records.
+
+    Each card holds still for most of its window and moves only at the
+    handover, so what the reader sees is a settled card rather than a
+    permanently animating one (V3 spec 40.5).
+    """
+    if count < 2:
+        return ""
+    total = count * seconds_each
+    share = 100.0 / count           # this card's slice of the whole cycle
+    enter = min(3.0, share / 6)     # slide in
+    leave = share - enter           # start sliding out
+    return (
+        "<style>"
+        "@keyframes sa-preview-cycle {"
+        f"0%{{opacity:0;transform:translateY(14px) scale(.985)}}"
+        f"{enter:.2f}%{{opacity:1;transform:none}}"
+        f"{leave:.2f}%{{opacity:1;transform:none}}"
+        f"{share:.2f}%{{opacity:0;transform:translateY(-14px) scale(.985)}}"
+        f"100%{{opacity:0;transform:translateY(-14px) scale(.985)}}"
+        "}"
+        "@keyframes sa-preview-dot {"
+        f"0%,{share:.2f}%,100%{{background:var(--border-hover);opacity:.45}}"
+        f"{enter:.2f}%,{leave:.2f}%{{background:var(--primary);opacity:1}}"
+        "}"
+        f".sa-preview-slide{{animation:sa-preview-cycle {total:.1f}s"
+        " var(--sa-ease-cycle, linear) infinite both}"
+        f".sa-preview-dots i{{animation:sa-preview-dot {total:.1f}s linear infinite both}}"
+        "</style>"
+    )
+
+
+@st.cache_data(show_spinner=False)
+def hero_preview(lang: str) -> str:
+    """
+    A miniature of real results, for the hero (spec 13.2).
+
+    NOT a mockup. Every card is a screening of the demo profile against the
+    live catalogue - the same verdict, the same condition count, the same next
+    step a user would get. A fabricated example card would be the one dishonest
+    thing on the landing page of a product that exists to not fabricate things.
+
+    The cards cycle in CSS rather than through reruns. A rerun every four
+    seconds would re-screen the catalogue and reset every widget on the page,
+    and Streamlit has no way to repaint one element on a timer without one.
+
+    Cached per language: it costs one screening pass, and the landing page is
+    the most re-rendered screen in the app.
+    """
+    matches = hero_preview_matches()
+    if not matches:
+        return ""
+
+    slides = "".join(
+        f'<div class="sa-preview-slide" style="animation-delay:'
+        f'{index * PREVIEW_SECONDS_PER_CARD:.1f}s">{hero_preview_card(match, lang)}</div>'
+        for index, match in enumerate(matches))
+
+    dots = ""
+    if len(matches) > 1:
+        dots = ('<div class="sa-preview-dots" aria-hidden="true">' + "".join(
+            f'<i style="animation-delay:{index * PREVIEW_SECONDS_PER_CARD:.1f}s"></i>'
+            for index in range(len(matches))) + "</div>")
+
+    return (
+        preview_cycle_css(len(matches), PREVIEW_SECONDS_PER_CARD)
+        + f'<div class="sa-preview" role="img" '
+          f'aria-label="{t("hero_preview_alt", lang)}">'
+          f'<div class="sa-preview-chrome"><span></span><span></span><span></span>'
+          f'{dots}</div>'
+          f'<div class="sa-preview-stack">{slides}</div>'
+          f'</div>'
     )
 
 

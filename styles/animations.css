@@ -84,4 +84,20 @@
   }
   .sa-stage.is-active .sa-stage-dot { animation: none !important; }
   .sa-stage.is-pending { filter: none; opacity: .55; }
+
+  /* The hero preview rotates through one real result per category. The
+     blanket rule above would run that cycle in 1ms and leave every card
+     parked on its final keyframe - which is opacity 0, so the hero would be
+     BLANK rather than merely still. Under reduced motion it becomes what it
+     should be: the first card, shown once, not moving. */
+  .sa-preview-slide { animation: none !important; opacity: 1 !important;
+                      transform: none !important; }
+  .sa-preview-stack > .sa-preview-slide:not(:first-child) { display: none; }
+  .sa-preview-dots { display: none !important; }
 }
+
+
+/* The rotation eases rather than sliding linearly: the card is settling into
+   place, not travelling across the screen. Consumed by the generated
+   keyframes in app.preview_cycle_css(). */
+:root { --sa-ease-cycle: cubic-bezier(.4, 0, .2, 1); }
