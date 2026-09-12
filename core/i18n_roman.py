@@ -386,6 +386,12 @@ ROMAN: Dict[str, str] = {
     "tab_source": "Maakhaz",
     "tab_ask": "Samjhein aur poochein",
 
+    # -- provisional deadlines --------------------------------------------
+    "deadline_provisional_badge": "Aarzi tareekh",
+    "deadline_provisional_note": "Yeh tareekh mutawaqqa marhale ke liye hamari aarzi tareekh hai, "
+                                 "idare ki elan karda nahi. Ginti ko andaza samjhein aur official "
+                                 "page par tasdeeq karein.",
+
     # -- follow-up ---------------------------------------------------------
     "ask_followup": "Koi aur sawal poochein",
     "ask_followup_hint": "Jawabat sirf upar diye records se aate hain aur hamesha source batate hain.",

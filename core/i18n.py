@@ -586,6 +586,13 @@ STRINGS: Dict[str, Dict[str, str]] = {
     "tab_source": {"en": "Source", "ur": "ماخذ"},
     "tab_ask": {"en": "Understand & ask", "ur": "سمجھیں اور پوچھیں"},
 
+    # ================= provisional deadlines (DATA-02) ====================
+    "deadline_provisional_badge": {"en": "Provisional date", "ur": "عارضی تاریخ"},
+    "deadline_provisional_note": {
+        "en": "This date is our placeholder for the expected cycle, not a date the authority "
+              "has announced. Treat the countdown as indicative and confirm on the official page.",
+        "ur": "یہ تاریخ متوقع مرحلے کے لیے ہماری عارضی تاریخ ہے، ادارے کی اعلان کردہ نہیں۔ گنتی کو اندازہ سمجھیں اور سرکاری صفحے پر تصدیق کریں۔"},
+
     # -- follow-up chat -----------------------------------------------------
     "ask_followup": {"en": "Ask a follow-up question", "ur": "مزید سوال پوچھیں"},
     "ask_followup_hint": {

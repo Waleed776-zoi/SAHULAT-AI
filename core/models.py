@@ -193,6 +193,11 @@ class EligibilityConditions:
     special_quota_note: Optional[str] = None
     min_experience_years: Optional[float] = None
     application_deadline: Optional[str] = None          # YYYY-MM-DD
+    # True when the date above is a stand-in for a cycle that has not been
+    # announced yet, rather than a date an authority has published. A deadline
+    # renders as a countdown - the most confident statement on the page - so
+    # the difference has to survive all the way to the UI.
+    deadline_is_provisional: bool = False
     # Added 2026-09-11 to support finer shortlisting.
     gender_required: Optional[str] = None               # female | male | any
     min_english_level: Optional[str] = None             # none | basic | intermediate | fluent
@@ -291,6 +296,7 @@ class Opportunity:
             special_quota_note=ec.get("special_quota_note"),
             min_experience_years=ec.get("min_experience_years"),
             application_deadline=ec.get("application_deadline"),
+            deadline_is_provisional=bool(ec.get("deadline_is_provisional", False)),
             gender_required=ec.get("gender_required"),
             min_english_level=ec.get("min_english_level"),
             min_computer_skills=ec.get("min_computer_skills"),
@@ -349,6 +355,7 @@ class MatchResult:
     # ineligible. Tracked separately so the UI can say so.
     listing_closed: bool = False
     deadline: Optional[str] = None
+    deadline_is_provisional: bool = False
     # Priority groups this profile matches. Advantages only - never a gate.
     matched_priority_groups: List[str] = field(default_factory=list)
 

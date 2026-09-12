@@ -102,7 +102,9 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | BUG-01 | Duplicate widget IDs crash the Upload tab | `app.py` | **P0** | **DONE** | — |
 | BUG-02 | Upload tab result vanishes on rerun (no session state) | `app.py` | **P0** | **DONE** | — |
 | DATA-01 | `TODO-VERIFY` placeholder text renders in the live UI | data + `app.py` | **P0** | **DONE** | — |
-| DATA-02 | Verify HEC / PEEF / NAVTTC eligibility figures against source | data | **P0** | TODO | — |
+| DATA-02 | Verify HEC / PEEF / NAVTTC eligibility figures against source | data | **P0** | **DONE** | Waleed |
+| DATA-05 | Concatenated JSON silently dropped 8 records from the catalogue | `data_loader.py` | **P0** | **DONE** | — |
+| DATA-06 | Provisional deadlines must not render as announced dates | `models.py` + `app.py` | **P1** | **DONE** | — |
 | BUG-03 | Zero income / zero marks silently become "not provided" | `app.py` | **P1** | **DONE** | — |
 | BUG-04 | Expired deadline reported as user ineligibility | `rules_engine.py` | **P1** | **DONE** | — |
 | I18N-01 | `name_ur` / `summary_ur` exist in data but are never displayed | `app.py` | **P1** | **DONE** | — |
@@ -232,6 +234,54 @@ Two layers, do both: (a) fix the data as part of DATA-02; (b) defensively guard 
 
 ---
 
+#### DATA-05 — Concatenated JSON silently dropped 8 records
+**Area:** `core/data_loader.py` · **Priority:** P0 · **Status:** **DONE**
+
+Eight curated records were pasted into `navttc_hunarmand.json` as consecutive
+top-level objects, which is not valid JSON. The loader caught the parse error
+per-file (deliberate: one bad file must not take the catalogue down) and
+skipped it with a log line - so **the catalogue silently fell to 2 records**
+with nothing on screen indicating anything was missing.
+
+The per-file isolation stays. What changed is that a file may now hold a single
+record, a **bare list**, or a list under a `jobs` / `records` key. Pasting
+several records into one file is the natural way to curate data, and it now
+works rather than failing invisibly.
+
+The eight records were split into `navttc_hunarmand.json` (the programme) and
+`navttc_courses.json` (the seven courses).
+
+- [x] List-shaped files load.
+- [x] Catalogue verified at 10 records after the fix.
+
+---
+
+#### DATA-06 — A provisional deadline must not read as an announced one
+**Area:** `core/models.py`, `core/rules_engine.py`, `app.py` · **Priority:** P1 · **Status:** **DONE**
+
+The deadlines now in the catalogue are **placeholders for expected cycles**, not
+dates any authority has published - none of these cycles are announced yet.
+
+That is a problem the UI creates rather than the data: a deadline drives a
+countdown, an urgency colour, the ranking order and the "Open" badge. It is the
+most confident-looking statement on the page, and V2's deadline intelligence
+made it more so. Left unmarked, ten invented dates would have been the least
+honest thing in a product built on not inventing things.
+
+`deadline_is_provisional` is set on the record, carried through `MatchResult`,
+and rendered beside the countdown as a **Provisional date** badge with: *"This
+date is our placeholder for the expected cycle, not a date the authority has
+announced."* All three languages.
+
+When a real cycle is announced, the fix is to change the date and drop one
+boolean. A test asserts every deadline currently in the catalogue is flagged,
+so entering a real date is a deliberate act rather than a silent one.
+
+- [x] Flag on the record, carried to the result, shown in the UI.
+- [x] Tested end to end; present in English, Urdu and Roman Urdu.
+
+---
+
 #### DATA-02 — Verify HEC / PEEF / NAVTTC eligibility figures
 **Area:** `data/opportunities/` · **Priority:** P0 · **Status:** TODO · **Owner:** —
 
@@ -260,11 +310,41 @@ For each record: open its `official_url`, confirm the current cycle's actual num
 | `peef_punjab_undergraduate` | — | — | — |
 | `navttc_hunarmand_pakistan` | — | — | — |
 
+**Resolved 2026-09-12.** Waleed verified the eligibility figures against the
+official pages and, in the same pass, curated **seven additional NAVTTC course
+records**. The catalogue went from 3 records to **10, all verified**.
+
+**Verification log**
+
+| Record | Checked by | Date | Outcome |
+|---|---|---|---|
+| `hec_balochistan_fata_ug` | Waleed | 2026-09-12 | verified against hec.gov.pk |
+| `peef_punjab_undergraduate` | Waleed | 2026-09-12 | verified against peef.org.pk |
+| `navttc_hunarmand_pakistan` | Waleed | 2026-09-12 | verified against navttc.gov.pk |
+| 7 × `navttc_*` course records | Waleed | 2026-09-12 | curated from course listings |
+
+**Metadata completed by Claude, not invented facts.** The eligibility numbers
+are the user's verified values and were not touched. What was filled in:
+
+- `last_verified` → 2026-09-12 on all ten; `confidence_status` → `verified`.
+- `source_date` corrected on three records. Two held dates **in the future**
+  (2026-10-10, 2026-12-01), which cannot describe when a page was published,
+  and PEEF still held `TODO-VERIFY` - caught by the existing DATA-01 guard.
+- `min_computer_skills` on three course records held the sentence *"basic
+  computer literacy recommended, not a stated hard requirement"*. That field is
+  a ranked vocabulary: the rules engine would have compared a user's skill level
+  against a prose string and silently gated people out. Set to `null` - which is
+  what the sentence itself says - and the nuance moved into
+  `special_quota_note`, where it is displayed rather than evaluated.
+- `application_deadline` supplied for all ten, each flagged
+  `deadline_is_provisional: true` (see DATA-06).
+
 **Acceptance criteria**
-- [ ] Zero `TODO-VERIFY` strings remain in the three curated files.
-- [ ] Each has a real `last_verified` date and `confidence_status: "verified"`.
-- [ ] Each record's `disclaimer` is updated or removed to reflect its now-verified state.
-- [ ] The verification log above is filled in.
+- [x] Zero `TODO-VERIFY` strings remain in the curated files.
+- [x] Each has a real `last_verified` date and `confidence_status: "verified"`.
+- [x] Each record's `disclaimer` reflects its now-verified state.
+- [x] The verification log above is filled in.
+- [x] Every record renders **Officially verified / Recently verified**.
 
 ---
 
@@ -1729,6 +1809,8 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-12 | **DATA-02** — deadlines were supplied, but flagged rather than asserted | The user asked for demo-suitable dates and that is reasonable for a prototype. A countdown is the most confident element on the page, so the honest version is to show it *and* say the date is ours. One boolean flips when a cycle is announced | Claude |
+| 2026-09-12 | **DATA-02** — prose in `min_computer_skills` set to null, not mapped to a level | The field is a ranked vocabulary the engine compares against. Guessing "basic" would have invented a gate; the record's own wording says it is not a requirement | Claude |
 | 2026-09-12 | **P2-1** — Roman Urdu ships at 100% coverage or not at all | A partially translated mode switches script mid-page, which is worse than not offering it. A coverage test is what makes the mode safe to ship and safe to extend | Claude |
 | 2026-09-12 | **P2-1** — Roman Urdu is left-to-right | It is Urdu language in Latin script. Mirroring the page because it is "the Urdu one" would be a plausible and wrong shortcut; `is_rtl()` keeps that decision in one place | Claude |
 | 2026-09-12 | **P2-2** — one constant behind the time estimate, printed in the UI | The figure cannot be counted, only assumed. Naming the assumption is what keeps the three counted figures credible in the room where it matters | Claude |
@@ -1781,6 +1863,10 @@ Append one line per completed piece of work.
 | 2026-09-11 | PERF-01..04 | Lazy + `@st.cache_resource` retrieval, offline model loading, opt-in semantic search, `.streamlit/config.toml`. **First render measured at 1.07s** (was ~30-35s), with no heavy modules imported at page load. |
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
+| 2026-09-12 | **DATA-02** | **Closed.** Waleed verified the eligibility figures and curated 7 more NAVTTC course records: catalogue 3 → **10, all verified**. Metadata (dates, confidence, disclaimers) completed; three `source_date` values were invalid (two in the future, one still `TODO-VERIFY`). |
+| 2026-09-12 | DATA-05 | Eight records were silently absent - concatenated JSON failed to parse and the file was skipped. Loader now accepts list-shaped files. |
+| 2026-09-12 | DATA-06 | Provisional deadlines flagged and labelled in the UI, so a placeholder date cannot render as an announced one. |
+| 2026-09-12 | TEST-01 | Suite grown 259 → **261 tests**. |
 | 2026-09-12 | **V2 P2** | Branch `v2`: Roman Urdu (third language, 445/445 strings), impact figures, visual polish incl. result-detail tabs and Urdu leading, empty states with routes out, and degraded-AI handling via `AiText`. New modules `core/i18n_roman.py`, `core/impact.py`. |
 | 2026-09-12 | TEST-01 | Suite grown 233 → **259 tests** (new `tests/test_p2_features.py`). |
 | 2026-09-12 | **V2 P1** | Branch `v2`: application readiness, deadline intelligence, scoped contextual Q&A, opportunity passport, comparison, freshness, plain-language explainer, source presentation. New modules `core/readiness.py`, `core/timeliness.py`, `core/comparison.py`. |

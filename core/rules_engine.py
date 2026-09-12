@@ -310,6 +310,7 @@ def evaluate(profile: UserProfile, opportunity: Opportunity,
         missing_profile_fields=missing,
         listing_closed=listing_closed,
         deadline=deadline_value,
+        deadline_is_provisional=ec.deadline_is_provisional,
         matched_priority_groups=matched_groups,
     )
 

@@ -1539,6 +1539,14 @@ def render_deadline(match) -> None:
            if match.deadline and urgency not in (URGENCY_UNKNOWN,) else "")
         + '</div>', unsafe_allow_html=True)
 
+    if match.deadline_is_provisional and urgency != URGENCY_UNKNOWN:
+        # A countdown is the most confident thing on this page. If the date
+        # behind it is our placeholder rather than an announcement, the page
+        # has to say so where the countdown is, not in a footnote.
+        st.markdown(badge(t("deadline_provisional_badge", lang), "tone-verify"),
+                    unsafe_allow_html=True)
+        st.caption(t("deadline_provisional_note", lang))
+
     if urgency == URGENCY_UNKNOWN:
         st.caption(t("urgency_unknown_note", lang))
     elif urgency == URGENCY_PASSED:
