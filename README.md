@@ -92,8 +92,14 @@ Every field marked `"TODO-VERIFY"` or `"TODO-VERIFY-BEFORE-DEMO"` needs a real h
 
 **Expected output:** three JSON files with no more `TODO` strings in them, each with a real `last_verified` date.
 
-### Step 8 — Fill in real NJP job listings (30–60 minutes, only if time allows)
-Open `data/opportunities/njp_jobs_sample.json`. Go to njp.gov.pk, find 2–3 real, currently-open listings, and replace every `"REPLACE ME"` field by hand. **Double-check the deadline is a future date** — the rules engine will flag a stale deadline automatically once you save it (it checks against today's date), so if you see `"Application deadline"` come back `unmet`, that's the engine correctly catching an expired listing.
+### Step 8 — Verify the job records (30–60 minutes) ✅ *data written, verification outstanding*
+`data/opportunities/government_jobs.json` holds **10 curated federal and provincial recruitment streams** — CSS, the FPSC consolidated advertisements, the four provincial service commissions, Punjab Police, Pakistan Post, NADRA and the Army's Lady Cadet Course. They are recruitment *streams* rather than named vacancies on purpose: a single advertised post is true for about three weeks, while the eligibility rules behind a stream are stable year to year, and the rules are what the engine screens on.
+
+All ten currently ship as `confidence_status: "needs_recheck"` with `last_verified: null`, so each one renders **"Not yet verified by our team"** in the UI. That is accurate — nobody has checked them against a live advertisement yet.
+
+To verify one, open its `official_url`, confirm the age, education and experience conditions, then set **both** `last_verified` and `source_date` to real dates and flip `confidence_status` to `"verified"`. A guard test rejects "verified" with a missing date, so you cannot half-do it.
+
+Deadlines are placeholders for the expected cycle and every record carries `deadline_is_provisional: true`, which is what makes the card show a **Provisional date** badge beside its countdown. When a real closing date is announced, enter it and drop the flag.
 
 ### Step 9 — Deploy to Streamlit Community Cloud (15 minutes)
 1. Push this folder to a GitHub repository (create one if you haven't).
@@ -128,12 +134,17 @@ sahulat_ai/
 │   └── i18n.py                     # English/Urdu UI strings
 ├── data/opportunities/
 │   ├── schema.json                 # Documents the shared record shape (not a real record)
-│   ├── hec_balochistan_fata.json   # NEEDS DATA VERIFICATION (Step 7)
-│   ├── peef_punjab.json            # NEEDS DATA VERIFICATION (Step 7)
-│   ├── navttc_hunarmand.json       # NEEDS DATA VERIFICATION (Step 7)
-│   └── njp_jobs_sample.json        # NEEDS REAL LISTINGS (Step 8)
-└── tests/
-    └── test_rules_engine.py        # 8 passing unit tests for the rules engine
+│   ├── hec_balochistan_fata.json   # verified 2026-09-12
+│   ├── peef_punjab.json            # verified 2026-09-12
+│   ├── navttc_hunarmand.json       # verified 2026-09-12
+│   ├── navttc_courses.json         # 7 course records, verified 2026-09-12
+│   └── government_jobs.json        # 10 job records — NEEDS VERIFICATION (Step 8)
+└── tests/                          # 288 passing tests
+    ├── test_rules_engine.py        # the deterministic engine
+    ├── test_core_modules.py        # data loading, verification state, i18n
+    ├── test_jobs_catalogue.py      # catalogue vocabulary + jobs guards
+    ├── test_app_ui.py              # Streamlit AppTest regressions
+    └── test_v2_features.py, test_p1_features.py, test_p2_features.py
 ```
 
 ---

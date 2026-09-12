@@ -4,10 +4,10 @@ Opportunity objects. Skips schema.json (documentation only) and any file
 starting with an underscore.
 
 Placeholder entries (name still starting with "REPLACE ME") are skipped so an
-uncurated record can never silently appear in a live demo - which is also why
-the Jobs category currently loads zero records. The UI reads the category
-counts below and labels an empty category honestly instead of showing an
-unexplained blank result set (DATA-03).
+uncurated record can never silently appear in a live demo. A category that
+ends up with no records is still reported with a count of zero: the UI reads
+the category counts below and labels an empty category honestly instead of
+showing an unexplained blank result set (DATA-03).
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def load_all_opportunities() -> List[Opportunity]:
             continue
 
         # A file may hold one record, a list of records, or a list wrapped
-        # under a key ("jobs" in njp_jobs_sample.json). Supporting the bare
+        # under a "jobs" / "records" key. Supporting the bare
         # list matters: several records concatenated into one file is the
         # natural way to paste curated data in, and before this the whole
         # file failed to parse and was skipped with only a log line - eight

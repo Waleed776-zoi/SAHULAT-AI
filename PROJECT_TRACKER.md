@@ -54,9 +54,10 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **259/259 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
-| Data loader | Loads **3** opportunities: `hec_balochistan_fata_ug` (scholarship), `navttc_hunarmand_pakistan` (skills), `peef_punjab_undergraduate` (scholarship) |
-| Job records loaded | **0** — all `njp_jobs_sample.json` entries are `REPLACE ME` placeholders and are correctly skipped by the loader |
+| Unit tests | **288/288 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Data loader | Loads **20** opportunities: 2 scholarship, 10 job, 8 skills, 0 assistance |
+| Job records loaded | **10** — `government_jobs.json`, curated 2026-09-12. All carry future provisional deadlines; none is human-verified yet (`needs_recheck`), so every one renders "Not yet verified by our team" |
+| Assistance records loaded | **0** — the category is still shown as "Coming soon" |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
 | Embedding model | `paraphrase-multilingual-MiniLM-L12-v2` cached locally, but semantic search is now **opt-in** (`SAHULAT_SEMANTIC_SEARCH=1`); keyword search is the default |
 | First render | **1.16s**, with no torch/sentence-transformers/chromadb imported at page load (was ~30–35s) |
@@ -105,6 +106,8 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | DATA-02 | Verify HEC / PEEF / NAVTTC eligibility figures against source | data | **P0** | **DONE** | Waleed |
 | DATA-05 | Concatenated JSON silently dropped 8 records from the catalogue | `data_loader.py` | **P0** | **DONE** | — |
 | DATA-06 | Provisional deadlines must not render as announced dates | `models.py` + `app.py` | **P1** | **DONE** | — |
+| DATA-04 | Jobs category was empty: curate a real jobs catalogue | data + tests | **P1** | **DONE** | — |
+| DATA-07 | Public Assistance category is still empty | data | **P2** | TODO | — |
 | BUG-03 | Zero income / zero marks silently become "not provided" | `app.py` | **P1** | **DONE** | — |
 | BUG-04 | Expired deadline reported as user ineligibility | `rules_engine.py` | **P1** | **DONE** | — |
 | I18N-01 | `name_ur` / `summary_ur` exist in data but are never displayed | `app.py` | **P1** | **DONE** | — |
@@ -431,6 +434,80 @@ Do **not** put translated strings in the rules engine — that would couple the 
 
 ---
 
+#### DATA-04 — The Jobs catalogue
+**Area:** `data/opportunities/government_jobs.json`, `core/data_loader.py`, tests · **Priority:** P1 · **Status:** **DONE**
+
+`njp_jobs_sample.json` held one `REPLACE ME` skeleton, correctly skipped by the
+loader, so the Jobs category loaded zero records and its landing path was
+disabled. It is now **10 curated records**, and the path switched on by itself
+— category availability has been derived from the data since DATA-03.
+
+**What was curated, and what it deliberately is not**
+
+These are **recurring recruitment streams**, not named vacancies: the CSS
+examination, the FPSC consolidated advertisements, the four provincial service
+commissions, Punjab Police constable recruitment, Pakistan Post, NADRA, and the
+Army's Lady Cadet Course. That choice is the point of the entry. A single
+vacancy — "Assistant Director (BPS-17), Ministry of X, 12 posts" — is true for
+about three weeks and then actively misleads; the eligibility *rules* behind
+these streams are stable year to year, which is what the engine screens on.
+Every record says so in its own disclaimer and points at the official portal
+for the live advertisement.
+
+**Coverage was designed, not accumulated**
+
+| Dimension | Spread |
+|---|---|
+| Domicile | 4 nationwide/federal, plus Punjab ×2, Sindh, KP, Balochistan |
+| Education | Matric ×1, Intermediate ×2, Bachelor ×6, Master ×1 |
+| Deadline urgency | 1 imminent, 3 soon, 6 plenty |
+| Job-specific gates | experience (1), gender (1), computer skills (3), English (8) |
+
+Matric and Intermediate entries matter more than the count suggests. A jobs
+list that only screens degree-holders excludes exactly the users this product
+exists for, so the demo profile — Intermediate, Balochistan — clears two of the
+ten and is blocked on a *stated* condition in the other eight. A test asserts
+both: that she finds at least one, and that every rejection names a blocker.
+
+**Verification status is honest, and currently red**
+
+All ten are `needs_recheck` with `last_verified: null`, so each renders **"Not
+yet verified by our team"**. Nobody has checked them against a live
+advertisement — marking them verified because the demo would look tidier is the
+exact failure DATA-01 exists to prevent. The catalogue is now split 10 verified
+/ 10 not, and the sidebar says so.
+
+Flipping one to verified requires a real `last_verified` **and** a real
+`source_date`; a guard test refuses the combination of "verified" with a
+missing date, so it cannot be done by editing one field.
+
+- [x] 10 records, loading, screening, and rendering in all three languages.
+- [x] Every deadline a future date and flagged provisional (DATA-06).
+- [x] 26 new guard tests; suite 261 → 288.
+
+---
+
+#### DATA-07 — Public Assistance is still empty
+**Area:** data · **Priority:** P2 · **Status:** TODO
+
+The last empty category: BISP, Bait-ul-Mal, Ehsaas and the provincial
+equivalents. It has no landing path of its own, so the only visible effect is
+the "Coming soon" chip on the home page — which is why it sits below DATA-04
+rather than beside it.
+
+Worth noting that this category screens differently from the other three.
+Assistance is means-tested on household circumstances rather than on
+qualifications, so `max_monthly_household_income`, `is_orphan` and
+`has_disability` carry the decisions while `min_education_level` and
+`min_experience_years` sit unused. The existing conditions cover it; no engine
+work is expected.
+
+- [ ] Curate 4-6 records with the same honesty rules as DATA-04.
+- [ ] Confirm the scorecard reads sensibly when the deciding conditions are
+      circumstances rather than qualifications.
+
+---
+
 #### DATA-03 — "Jobs" category is selectable but always returns nothing
 **Area:** `data/opportunities/njp_jobs_sample.json`, `app.py` · **Priority:** P1 · **Status:** **DONE** · **Owner:** —
 
@@ -443,10 +520,16 @@ A judge clicking "Jobs" sees a dead feature.
 **Fix approach**
 Either (a) complete Step 8 of the README — add 2–3 real currently-open listings from njp.gov.pk with future deadlines — or (b) if that isn't done in time, mark Jobs as "Coming Soon" in the same way `category_assistance` already is, so the gap is honest and deliberate rather than looking broken. **Decide which, and record it in the Decision Log.**
 
+**Resolved in two stages.** On 2026-09-11 the UI was made to derive category
+availability from the loaded data, so Jobs showed as a disabled "Coming soon"
+path instead of a dead button — honest, and self-correcting. On 2026-09-12 the
+data itself landed (DATA-04) and the path switched on with **no code change**,
+which is exactly what that design was for.
+
 **Acceptance criteria**
-- [ ] Either real job records load and screen correctly, **or** the Jobs category is explicitly labelled as not yet available.
-- [ ] No path through the UI shows an unexplained empty result set.
-- [ ] If real listings are added: every `application_deadline` is a future date, verified the day before the demo.
+- [x] Real job records load and screen correctly (10 records).
+- [x] No path through the UI shows an unexplained empty result set.
+- [x] Every `application_deadline` is a future date — asserted by a test, not by memory.
 
 ---
 
@@ -1765,7 +1848,7 @@ Phases, not deadlines. Each phase should leave the app in a demonstrable state.
 *Exit criteria: `streamlit run` to an interactive form in under ~5s, with wifi disabled.*
 
 **Phase 2 — Truth** ⚠️ PARTIAL — `DATA-02` (verify the real numbers) is the one blocker left; it needs a human with the official sources
-`DATA-02` (verify the numbers) → `DATA-03` (jobs: fill or flag) → `OPS-02` (model name) → `OPS-01` (Gemini error handling).
+`DATA-02` (verify the numbers) → `DATA-03` (jobs: fill or flag) → `DATA-04` (jobs: filled) → `OPS-02` (model name) → `OPS-01` (Gemini error handling). `DATA-07` (public assistance) is the last empty category.
 *Exit criteria: nothing shown to a user is unverified or capable of crashing the page.*
 
 **Phase 3 — Deliver the bilingual promise** ✅ DONE
@@ -1809,6 +1892,8 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-12 | **DATA-04** — the Jobs catalogue records recruitment *streams*, not named vacancies | A named vacancy is true for about three weeks and then misleads. The eligibility rules behind a recurring stream are stable year to year, and the rules are what the engine screens on | Claude |
+| 2026-09-12 | **DATA-04** — all ten job records ship as `needs_recheck`, showing "Not yet verified by our team" | Nobody has checked them against a live advertisement. Marking them verified because the demo looks tidier is the DATA-01 failure with better intentions. The catalogue now reads 10 verified / 10 not, which is the truth | Claude |
 | 2026-09-12 | **DATA-02** — deadlines were supplied, but flagged rather than asserted | The user asked for demo-suitable dates and that is reasonable for a prototype. A countdown is the most confident element on the page, so the honest version is to show it *and* say the date is ours. One boolean flips when a cycle is announced | Claude |
 | 2026-09-12 | **DATA-02** — prose in `min_computer_skills` set to null, not mapped to a level | The field is a ranked vocabulary the engine compares against. Guessing "basic" would have invented a gate; the record's own wording says it is not a requirement | Claude |
 | 2026-09-12 | **P2-1** — Roman Urdu ships at 100% coverage or not at all | A partially translated mode switches script mid-page, which is worse than not offering it. A coverage test is what makes the mode safe to ship and safe to extend | Claude |
@@ -1864,6 +1949,8 @@ Append one line per completed piece of work.
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
 | 2026-09-12 | **DATA-02** | **Closed.** Waleed verified the eligibility figures and curated 7 more NAVTTC course records: catalogue 3 → **10, all verified**. Metadata (dates, confidence, disclaimers) completed; three `source_date` values were invalid (two in the future, one still `TODO-VERIFY`). |
+| 2026-09-12 | **DATA-04** | **Jobs category filled.** 10 curated federal and provincial recruitment streams in `government_jobs.json`; the `REPLACE ME` skeleton file removed. Catalogue 10 → **20**. The landing path switched on with no code change. |
+| 2026-09-12 | TEST-02 | New `tests/test_jobs_catalogue.py` (26 tests). Guards every vocabulary field across the whole catalogue - the `min_computer_skills` prose bug and the province-string mismatch are now both impossible to reintroduce silently. Suite 261 → **288**. |
 | 2026-09-12 | DATA-05 | Eight records were silently absent - concatenated JSON failed to parse and the file was skipped. Loader now accepts list-shaped files. |
 | 2026-09-12 | DATA-06 | Provisional deadlines flagged and labelled in the UI, so a placeholder date cannot render as an announced one. |
 | 2026-09-12 | TEST-01 | Suite grown 259 → **261 tests**. |

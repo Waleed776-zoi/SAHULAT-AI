@@ -13,6 +13,9 @@ from unittest import mock
 
 from streamlit.testing.v1 import AppTest
 
+from core.data_loader import category_counts, load_all_opportunities
+from core.i18n import t
+
 APP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
 
 
@@ -495,14 +498,38 @@ class TestV2Landing(unittest.TestCase):
                       "Check an advertisement"):
             self.assertIn(label, self.body)
 
-    def test_empty_category_path_is_disabled_not_hidden(self):
+    def test_path_availability_follows_the_catalogue(self):
         """
-        A path that leads nowhere yet should say so rather than vanish - the
-        catalogue being thin is a fact about the data, not a feature to hide.
+        A path leads somewhere exactly when its category has records.
+
+        This used to assert that the Jobs path was disabled, which was really
+        an assertion about the data of the day rather than about the rule - it
+        broke the moment the Jobs catalogue was curated. The rule is the
+        relationship between the count and the button, so that is what is
+        tested, and it holds whichever categories happen to be filled.
         """
-        job_button = [b for b in self.app.button if b.key == "path_job"]
-        self.assertTrue(job_button)
-        self.assertTrue(job_button[0].disabled)
+        counts = category_counts(load_all_opportunities())
+        for category in ("scholarship", "job", "skills"):
+            button = [b for b in self.app.button if b.key == f"path_{category}"]
+            self.assertTrue(button, f"no landing path rendered for {category}")
+            self.assertEqual(
+                button[0].disabled, counts[category] == 0,
+                f"{category} has {counts[category]} records but disabled="
+                f"{button[0].disabled}",
+            )
+
+    def test_empty_category_is_labelled_not_hidden(self):
+        """
+        DATA-03: a category with nothing in it is shown saying so, rather than
+        quietly dropped - the catalogue being thin is a fact about the data,
+        not a feature to hide. Public assistance is still empty, so it is the
+        category that proves the behaviour.
+        """
+        counts = category_counts(load_all_opportunities())
+        self.assertEqual(counts["assistance"], 0,
+                         "update this test once assistance records exist")
+        self.assertIn(t("category_assistance", "en"), self.body)
+        self.assertIn(t("coming_soon", "en"), self.body)
 
     def test_benefits_row_is_present(self):
         self.assertIn("sa-benefit", self.body)
