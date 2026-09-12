@@ -1,5 +1,5 @@
 {
-  "_comment": "This is documentation, not a real record. Every file in this folder (except this one) must follow this exact shape. Fields left as null mean 'this condition does not apply / is not used to screen this opportunity' and are skipped by the rules engine.",
+  "_comment": "This is documentation, not a real record. Every file in this folder (except this one) must follow this exact shape. Fields left as null mean 'this condition does not apply / is not used to screen this opportunity' and are skipped by the rules engine. Fields added 2026-09-11: gender_required, min_english_level, min_computer_skills, fields_of_study (gates) and priority_groups (advantage only, never a gate).",
   "opportunity_id": "string, unique, snake_case",
   "name": "string, official program name",
   "name_ur": "string, Urdu name",
@@ -21,10 +21,19 @@
     "employment_status_required": "one of: unemployed | employed | any | null",
     "special_quota_note": "string or null, e.g. exemptions for orphans / BPS 1-4 govt employees' children",
     "min_experience_years": "number or null, used for job/category=job entries only",
-    "application_deadline": "YYYY-MM-DD or null, used for job/category=job entries only (jobs go stale - always check this)"
+    "application_deadline": "YYYY-MM-DD or null, used for job/category=job entries only (jobs go stale - always check this)",
+    "gender_required": "one of: female | male | any | null (null = no gender restriction). Use only when the programme genuinely reserves places by gender.",
+    "min_english_level": "one of: none | basic | intermediate | fluent | null",
+    "min_computer_skills": "one of: none | basic | intermediate | advanced | null",
+    "fields_of_study": "list of study fields the programme is restricted to, or null (null = open to all fields). Allowed values are listed in core/models.FIELDS_OF_STUDY",
+    "priority_groups": "list of groups this programme gives PRIORITY to, or null. An ADVANTAGE ONLY - never used to exclude anyone. Allowed: female | disability | orphan | minority | under_served_district. Only add a group if the official source actually states it."
   },
-  "required_documents": ["list of strings"],
-  "application_steps": ["list of strings, in order"],
+  "required_documents": [
+    "list of strings"
+  ],
+  "application_steps": [
+    "list of strings, in order"
+  ],
   "official_url": "string, must be a real official URL",
   "source_title": "string, name of the page/document this was sourced from",
   "source_date": "YYYY-MM-DD, date the source page/document itself was published or last updated, if known",

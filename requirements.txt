@@ -1,16 +1,31 @@
-# Core app
+# ---------------------------------------------------------------------------
+# Core app - this is all you need to run Sahulat AI.
+# ---------------------------------------------------------------------------
 streamlit>=1.38
 
-# Gemini (LLM + multimodal ad reading)
-google-generativeai>=0.8
+# Gemini (LLM explanations + multimodal ad reading).
+# google-genai is the current SDK; google-generativeai is end-of-life but still
+# supported by core/llm_client.py so an existing install keeps working.
+# See PROJECT_TRACKER.md OPS-02.
+google-genai>=1.0
 
-# RAG (optional at first - app falls back to keyword search if these
-# aren't installed or the embedding model can't be downloaded)
-chromadb>=0.5
-sentence-transformers>=3.0
+# ---------------------------------------------------------------------------
+# OPTIONAL - semantic (multilingual) retrieval for the follow-up chat.
+#
+# The app does NOT need these. Retrieval defaults to keyword search, which is
+# instant and needs no model. These pull in PyTorch (~2GB) and add ~25-30s to
+# first use, which is also what tends to break a Streamlit Community Cloud
+# build. Install them only if you want Urdu-question -> English-record
+# retrieval, then enable it with:  SAHULAT_SEMANTIC_SEARCH=1
+# See PROJECT_TRACKER.md PERF-01, PERF-03 and OPS-05.
+# ---------------------------------------------------------------------------
+# chromadb>=0.5
+# sentence-transformers>=3.0
 
+# ---------------------------------------------------------------------------
 # Document ingestion for curating catalog sources during data work
 # (not required to run the app itself - install only when doing data curation)
+# ---------------------------------------------------------------------------
 # pymupdf>=1.24
 # pdfplumber>=0.11
 # python-docx>=1.1

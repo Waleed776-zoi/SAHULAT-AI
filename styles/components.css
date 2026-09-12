@@ -1,0 +1,557 @@
+/* ===========================================================================
+   Sahulat AI — components
+   =========================================================================== */
+
+/* ---------- Header: a distinct navigation layer ---------- */
+.sahulat-header {
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  padding: var(--s4) var(--s5);
+  margin-bottom: var(--s6);
+}
+.sahulat-header-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--s5); flex-wrap: wrap;
+}
+.sahulat-logo { display: flex; align-items: baseline; gap: var(--s3); }
+.sahulat-logo-mark {
+  width: 26px; height: 26px; flex: 0 0 auto; align-self: center;
+  transition: transform var(--motion-normal) var(--ease);
+}
+.sahulat-logo:hover .sahulat-logo-mark { transform: translateY(-2px); }
+.sahulat-logo-name {
+  font-family: var(--sa-font-display); font-size: 1.3rem; font-weight: 700;
+  color: var(--primary-dark); line-height: var(--sa-display-lh);
+  letter-spacing: -.01em;
+}
+.sahulat-logo-ur {
+  font-family: 'Noto Nastaliq Urdu', serif; font-size: 1rem;
+  color: var(--primary); opacity: .8; line-height: 2;
+}
+.sahulat-logo-sep { color: var(--border); }
+
+.sahulat-nav { display: flex; gap: var(--s5); align-items: center; }
+.sahulat-nav a {
+  position: relative; font-size: .88rem; font-weight: 600;
+  color: var(--muted); text-decoration: none; padding-bottom: 2px;
+  transition: color var(--motion-fast) var(--ease);
+}
+.sahulat-nav a::after {
+  content: ""; position: absolute; left: 0; bottom: -2px; height: 1.5px;
+  width: 0; opacity: 0; background: var(--primary);
+  transition: width var(--motion-normal) var(--ease),
+              opacity var(--motion-normal) var(--ease);
+}
+.sahulat-nav a:hover { color: var(--primary-dark); }
+.sahulat-nav a:hover::after { width: 100%; opacity: 1; }
+
+/* ---------- Hero ---------- */
+.sa-eyebrow {
+  font-size: .72rem; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--primary); margin-bottom: var(--s3);
+}
+.sa-hero-title {
+  font-family: var(--sa-font-display); font-weight: 600;
+  font-size: clamp(2rem, 4.4vw, 3.35rem); line-height: var(--sa-display-lh);
+  color: var(--ink); margin: 0 0 var(--s4); letter-spacing: -.02em;
+}
+.sa-hero-body {
+  font-size: 1.05rem; line-height: 1.62; color: var(--ink-soft);
+  max-width: 60ch; margin: 0 0 var(--s5);
+}
+.sa-inline-trust {
+  display: flex; flex-wrap: wrap; gap: var(--s5);
+  margin-top: var(--s5); padding-top: var(--s4); border-top: 1px solid var(--border);
+}
+.sa-trust-item {
+  font-size: .84rem; color: var(--ink-soft); font-weight: 500;
+  display: inline-flex; align-items: center; gap: var(--s2);
+}
+.sa-trust-item::before { content: "✓"; color: var(--primary); font-weight: 700; }
+
+/* ---------- Section headings ---------- */
+.sa-section-label {
+  font-size: .72rem; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--muted); margin: var(--s8) 0 var(--s3);
+}
+.sa-section-title {
+  font-family: var(--sa-font-display); font-size: 1.6rem; font-weight: 600;
+  color: var(--ink); margin: 0 0 var(--s2); line-height: var(--sa-display-lh);
+}
+.sa-section-lede {
+  color: var(--ink-soft); font-size: .97rem; max-width: 68ch;
+  line-height: 1.6; margin: 0 0 var(--s4);
+}
+.sa-rule { height: 1px; background: var(--border-soft); margin: var(--s5) 0; }
+
+/* ---------- Panels ---------- */
+.sa-panel-head { margin-bottom: var(--s4); }
+.sa-panel-title {
+  font-family: var(--sa-font-display); font-size: 1.45rem; font-weight: 600;
+  color: var(--ink); margin: 0; line-height: var(--sa-display-lh);
+}
+.sa-panel-caption {
+  color: var(--muted); font-size: .9rem; line-height: 1.55;
+  margin: var(--s2) 0 0; max-width: 62ch;
+}
+.sa-stepcount {
+  font-size: .7rem; font-weight: 600; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--primary); margin-bottom: var(--s2);
+}
+
+/* ---------- Category cards (the signature hover) ---------- */
+.sahulat-category {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: var(--s5); height: 100%;
+  transition: transform var(--motion-normal) var(--ease),
+              box-shadow var(--motion-normal) ease,
+              border-color var(--motion-normal) ease,
+              background var(--motion-normal) ease;
+}
+.sahulat-category:hover {
+  transform: translateY(-3px);
+  border-color: rgba(23,107,85,.30);
+  box-shadow: var(--shadow-hover);
+  background: linear-gradient(var(--surface), var(--primary-soft) 320%);
+}
+.sahulat-category:hover .sahulat-category-icon { transform: translateY(-2px); }
+.sahulat-category:hover .sahulat-category-accent { width: 100%; }
+.sahulat-category-icon {
+  display: block; margin-bottom: var(--s3); color: var(--primary);
+  transition: transform var(--motion-normal) var(--ease);
+}
+.sahulat-category-name {
+  font-weight: 600; font-size: 1rem; color: var(--ink); margin-bottom: var(--s1);
+}
+.sahulat-category-accent {
+  height: 2px; width: 25%; background: var(--primary); border-radius: 2px;
+  margin-bottom: var(--s3);
+  transition: width var(--motion-normal) var(--ease);
+}
+.sahulat-category-body { font-size: .86rem; color: var(--muted); line-height: 1.55; }
+
+/* ---------- The Sahulat Path (connected journey) ---------- */
+.sahulat-path { width: 100%; height: auto; display: block; }
+.sahulat-path-mobile { display: none; }
+
+/* ---------- Numbered items ---------- */
+.sa-journey-item {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: var(--s5); height: 100%;
+  transition: border-color var(--motion-normal) ease,
+              box-shadow var(--motion-normal) ease;
+}
+.sa-journey-item:hover {
+  border-color: rgba(23,107,85,.25); box-shadow: var(--shadow-soft);
+}
+.sa-num {
+  font-family: var(--sa-font-display); font-size: .92rem; font-weight: 700;
+  color: var(--primary); letter-spacing: .04em; display: block;
+  margin-bottom: var(--s2);
+}
+.sa-item-title {
+  font-weight: 600; font-size: .97rem; color: var(--ink); margin-bottom: var(--s1);
+}
+.sa-item-body { font-size: .86rem; color: var(--muted); line-height: 1.55; }
+
+/* ---------- Stepper ---------- */
+.sa-stepper {
+  display: flex; gap: var(--s1); margin-bottom: var(--s5);
+  border: 1px solid var(--border); background: var(--surface);
+  border-radius: var(--radius-md); padding: var(--s2);
+}
+.sa-stepitem {
+  flex: 1 1 0; display: flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s3); border-radius: var(--radius-sm); min-width: 0;
+  transition: background var(--motion-normal) var(--ease);
+}
+.sa-stepitem.current { background: var(--primary-soft); }
+.sa-stepnum {
+  flex: 0 0 auto; width: 1.5rem; height: 1.5rem; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .74rem; font-weight: 700; border: 1.5px solid var(--border);
+  color: var(--muted); background: var(--surface);
+  transition: background var(--motion-normal) var(--ease),
+              border-color var(--motion-normal) var(--ease);
+}
+.sa-stepitem.current .sa-stepnum {
+  background: var(--primary); border-color: var(--primary); color: #fff;
+}
+.sa-stepitem.done .sa-stepnum {
+  background: var(--primary-dark); border-color: var(--primary-dark); color: #fff;
+}
+.sa-steplabel {
+  font-size: .8rem; font-weight: 600; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sa-stepitem.current .sa-steplabel { color: var(--primary-dark); }
+.sa-stepitem.done .sa-steplabel { color: var(--ink-soft); }
+
+/* ---------- Field markers ---------- */
+.sa-tagrow { margin-bottom: -.45rem; }
+.sa-tag {
+  font-size: .62rem; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; padding: .12rem .4rem; border-radius: var(--radius-sm);
+}
+.sa-tag.req { background: var(--primary-soft); color: var(--primary-dark); }
+.sa-tag.opt { background: var(--surface-soft); color: var(--muted); }
+.sa-fielderror {
+  color: var(--danger); font-size: .8rem; font-weight: 500;
+  margin: var(--s1) 0 var(--s3);
+}
+
+/* ---------- Badges ---------- */
+.sa-badge {
+  display: inline-block; padding: .2rem .55rem; border-radius: var(--radius-sm);
+  font-size: .72rem; font-weight: 600; border: 1px solid; white-space: nowrap;
+}
+.tone-good   { background: var(--primary-soft); color: var(--primary-dark); border-color: #BFDECF; }
+.tone-verify { background: var(--gold-soft);    color: var(--gold);         border-color: #E6D6AC; }
+.tone-no     { background: var(--danger-soft);  color: var(--danger);       border-color: #E9CACA; }
+.tone-info   { background: var(--info-soft);    color: var(--info);         border-color: #CFE0E9; }
+.tone-mute   { background: var(--surface-soft); color: var(--muted);        border-color: var(--border); }
+
+/* ---------- Results ---------- */
+.sa-result-rank {
+  font-family: var(--sa-font-display); font-size: 1.45rem; font-weight: 700;
+  color: var(--border); line-height: 1;
+}
+.sa-result-title {
+  font-family: var(--sa-font-display); font-size: 1.18rem; font-weight: 600;
+  color: var(--ink); line-height: 1.3; margin: 0;
+}
+.sa-result-authority { font-size: .82rem; color: var(--muted); margin-top: var(--s1); }
+.sa-first-note {
+  font-size: .7rem; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--primary); margin-bottom: var(--s2);
+}
+
+/* ---------- Condition rows ---------- */
+.sa-checkrow {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s2) 0; border-bottom: 1px solid var(--border-soft);
+}
+.sa-checkrow:last-child { border-bottom: none; }
+.sa-mark {
+  flex: 0 0 auto; width: 1.15rem; height: 1.15rem; border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .7rem; font-weight: 700; margin-top: .15rem;
+}
+.mark-good   { background: var(--primary-soft); color: var(--primary); }
+.mark-no     { background: var(--danger-soft);  color: var(--danger); }
+.mark-verify { background: var(--gold-soft);    color: var(--gold); }
+.sa-checkname { font-size: .87rem; font-weight: 600; color: var(--ink); }
+.sa-checkdetail { font-size: .8rem; color: var(--muted); }
+
+/* ---------- Source provenance ---------- */
+.sahulat-source {
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: var(--s4); background: var(--surface-soft);
+  transition: border-color var(--motion-normal) ease,
+              background var(--motion-normal) ease;
+}
+.sahulat-source:hover { border-color: var(--border-hover); background: var(--gold-soft); }
+.sahulat-source.verified { background: var(--gold-soft); border-color: #E6D6AC; }
+.sa-source-label {
+  font-size: .66rem; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: var(--s2);
+}
+.sa-source-name { font-weight: 600; font-size: .92rem; color: var(--ink); }
+.sa-source-meta { font-size: .8rem; color: var(--muted); margin-top: var(--s1); }
+.sa-source-link {
+  display: inline-block; margin-top: var(--s2); font-size: .85rem;
+  font-weight: 600; color: var(--primary-dark); text-decoration: none;
+}
+.sa-source-link .sa-arrow {
+  display: inline-block; transition: transform var(--motion-fast) var(--ease);
+}
+.sa-source-link:hover .sa-arrow { transform: translateX(3px); }
+
+/* ---------- Callouts ---------- */
+.sa-callout {
+  border-inline-start: 3px solid var(--primary);
+  background: var(--primary-soft); padding: var(--s3) var(--s4);
+  border-radius: var(--radius-sm); font-size: .86rem; color: var(--ink-soft);
+  margin: var(--s3) 0; line-height: 1.55;
+}
+.sa-callout.verify { border-color: var(--gold); background: var(--gold-soft); }
+.sa-callout.info   { border-color: var(--info); background: var(--info-soft); }
+.sa-callout-title {
+  font-weight: 700; color: var(--ink); display: block; margin-bottom: var(--s1);
+}
+
+/* ---------- Timeline ---------- */
+.sahulat-timeline { position: relative; padding-inline-start: var(--s5); }
+.sahulat-timeline::before {
+  content: ""; position: absolute; inset-inline-start: 6px; top: 6px; bottom: 6px;
+  width: 1px; background: var(--border);
+}
+.sa-tl-item { position: relative; padding-bottom: var(--s4); }
+.sa-tl-item::before {
+  content: ""; position: absolute;
+  inset-inline-start: calc(-1 * var(--s5) + 3px);
+  top: .35rem; width: 7px; height: 7px; border-radius: 50%; background: var(--primary);
+}
+.sa-tl-step {
+  font-size: .66rem; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--primary);
+}
+.sa-tl-body { font-size: .86rem; color: var(--ink-soft); line-height: 1.55; }
+
+/* ---------- Stats ---------- */
+.sa-stat-num {
+  font-family: var(--sa-font-display); font-size: 2rem; font-weight: 700;
+  color: var(--primary-dark); line-height: 1;
+}
+.sa-stat-label { font-size: .8rem; color: var(--muted); margin-top: var(--s1); }
+
+/* ---------- Answer summary ---------- */
+.sa-answer {
+  display: flex; justify-content: space-between; gap: var(--s4);
+  padding: .3rem 0; border-bottom: 1px solid var(--border-soft); font-size: .83rem;
+}
+.sa-answer:last-child { border-bottom: none; }
+.sa-answer-label { color: var(--muted); }
+.sa-answer-value { color: var(--ink); font-weight: 600; text-align: end; }
+
+/* ---------- Staged processing (UX-10) ----------
+   Shown ONLY while real work is running. Every stage maps to an actual step:
+   a stage lights up when that step starts and is ticked when it returns. No
+   timers, no padded delays - the AI read genuinely takes several seconds and
+   that is what the panel is showing.
+
+   All four stages stay on screen throughout, dimmed and slightly blurred
+   until their turn. That is what makes the fast stages legible without
+   inventing time for them: the reader sees a list filling in, not labels
+   flashing past.
+   ---------------------------------------------------------------------- */
+.sa-stages {
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); box-shadow: var(--shadow-soft);
+  padding: var(--s5); margin: var(--s4) 0;
+}
+.sa-stage {
+  display: flex; align-items: flex-start; gap: var(--s3);
+  padding: var(--s2) 0;
+  transition: opacity var(--motion-normal) var(--ease),
+              filter var(--motion-normal) var(--ease);
+}
+.sa-stage.is-pending { opacity: .38; filter: blur(.8px); }
+.sa-stage.is-active  { opacity: 1;   filter: none; }
+.sa-stage.is-done    { opacity: .78; filter: none; }
+
+.sa-stage-dot {
+  flex: 0 0 auto; width: 1.3rem; height: 1.3rem; border-radius: 50%;
+  border: 1.5px solid var(--border-hover); background: var(--surface);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: .66rem; font-weight: 700; color: var(--muted); margin-top: .1rem;
+  transition: border-color var(--motion-normal) var(--ease),
+              background var(--motion-normal) var(--ease),
+              color var(--motion-normal) var(--ease);
+}
+.sa-stage.is-done .sa-stage-dot {
+  background: var(--primary-soft); border-color: var(--primary); color: var(--primary);
+}
+.sa-stage.is-active .sa-stage-dot {
+  border-color: var(--primary); color: var(--primary);
+  animation: sahulatStageRing 1.5s var(--ease) infinite;
+}
+.sa-stage-body { flex: 1 1 auto; min-width: 0; }
+.sa-stage-label { font-size: .88rem; font-weight: 600; color: var(--ink); }
+.sa-stage.is-pending .sa-stage-label { font-weight: 500; color: var(--ink-soft); }
+
+/* Indeterminate: it says "working", never a fabricated percentage. */
+.sa-stage-track {
+  height: 2px; margin-top: var(--s2); border-radius: 2px;
+  background: var(--border-soft); overflow: hidden;
+}
+.sa-stage-track > span {
+  display: block; height: 100%; width: 38%; border-radius: 2px;
+  background: var(--primary);
+  animation: sahulatStageSlide 1.25s var(--ease) infinite;
+}
+.sa-stage-note { font-size: .78rem; color: var(--muted); margin-top: var(--s3); }
+
+/* ---------- Extracted document summary (UX-10) ---------- */
+.sa-extract-title {
+  font-family: var(--sa-font-display); font-size: 1.22rem; font-weight: 700;
+  color: var(--ink); line-height: 1.3; margin: var(--s3) 0 var(--s2);
+}
+.sa-extract-lede { font-size: .93rem; color: var(--ink-soft); line-height: 1.6; }
+.sa-extract-meta {
+  font-size: .8rem; color: var(--muted); margin-top: var(--s2);
+  display: flex; flex-wrap: wrap; gap: var(--s1) var(--s4);
+}
+.sa-unstated {
+  display: flex; flex-wrap: wrap; gap: var(--s2);
+  margin-top: var(--s2);
+}
+.sa-unstated > span {
+  font-size: .76rem; color: var(--muted);
+  border: 1px dashed var(--border); border-radius: var(--radius-sm);
+  padding: .15rem var(--s2); background: var(--bg);
+}
+
+/* ---------- Footer ---------- */
+.sa-footer {
+  margin-top: var(--s10); padding-top: var(--s6);
+  border-top: 1px solid var(--border); color: var(--muted); font-size: .84rem;
+}
+.sa-footer-brand {
+  font-family: var(--sa-font-display); font-size: 1.1rem; font-weight: 700;
+  color: var(--primary-dark);
+}
+.sa-footer-head {
+  font-size: .68rem; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-soft); margin-bottom: var(--s2);
+}
+.sa-footer-note {
+  margin-top: var(--s5); padding-top: var(--s4);
+  border-top: 1px solid var(--border-soft); font-size: .8rem; max-width: 78ch;
+}
+
+/* ===========================================================================
+   Streamlit widget restyling — every control gets a visible boundary by
+   DEFAULT. Relying on focus to reveal the box was the reported usability
+   problem (spec 9.1): people could not tell a field was interactive.
+   =========================================================================== */
+
+/* Select */
+div[data-baseweb="select"] > div {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  min-height: var(--field-height);
+  transition: border-color var(--motion-normal) ease,
+              box-shadow var(--motion-normal) ease;
+}
+div[data-baseweb="select"] > div:hover {
+  border-color: var(--border-hover) !important;
+  box-shadow: 0 0 0 2px rgba(23,107,85,.04);
+}
+div[data-baseweb="select"] > div:focus-within {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(23,107,85,.10);
+}
+
+/* Number and text inputs */
+.stNumberInput div[data-baseweb="input"],
+.stTextInput div[data-baseweb="input"] {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-md) !important;
+  min-height: var(--field-height);
+  transition: border-color var(--motion-normal) ease,
+              box-shadow var(--motion-normal) ease;
+}
+.stNumberInput div[data-baseweb="input"]:hover,
+.stTextInput div[data-baseweb="input"]:hover {
+  border-color: var(--border-hover) !important;
+}
+.stNumberInput div[data-baseweb="input"]:focus-within,
+.stTextInput div[data-baseweb="input"]:focus-within {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(23,107,85,.10);
+}
+.stNumberInput input, .stTextInput input { background: transparent !important; }
+
+/* Field labels always above the control, never placeholder-only */
+.stSelectbox label, .stNumberInput label, .stTextInput label {
+  font-size: .86rem !important; font-weight: 600 !important;
+  color: var(--ink) !important;
+}
+
+/* Segmented control (gender) — clear, tappable, soft green when selected */
+div[data-testid="stSegmentedControl"] button {
+  border-radius: var(--radius-md) !important;
+  min-height: 44px; font-weight: 600 !important;
+  border: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  transition: background var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) var(--ease);
+}
+div[data-testid="stSegmentedControl"] button:hover {
+  border-color: var(--border-hover) !important;
+}
+div[data-testid="stSegmentedControl"] button[aria-checked="true"],
+div[data-testid="stSegmentedControl"] button[aria-selected="true"] {
+  background: var(--primary-soft) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary-dark) !important;
+}
+
+/* Checkboxes */
+.stCheckbox { padding: .1rem 0; }
+
+/* Buttons */
+.stButton > button {
+  border-radius: var(--radius-sm); font-weight: 600; font-size: .88rem;
+  padding: .6rem 1.15rem; border: 1px solid var(--border);
+  color: var(--ink); background: var(--surface); min-height: 44px;
+  transition: transform var(--motion-fast) var(--ease),
+              border-color var(--motion-fast) ease,
+              background var(--motion-fast) ease,
+              box-shadow var(--motion-fast) ease;
+}
+.stButton > button:hover {
+  border-color: var(--primary); color: var(--primary-dark);
+  transform: translateY(-1px); box-shadow: var(--shadow-soft);
+}
+.stButton > button:active { transform: scale(.985); }
+.stButton > button[kind="primary"] {
+  background: var(--primary); border-color: var(--primary); color: #fff;
+}
+.stButton > button[kind="primary"]:hover {
+  background: var(--primary-dark); border-color: var(--primary-dark); color: #fff;
+}
+.stDownloadButton > button { border-radius: var(--radius-sm); font-weight: 600; }
+
+/* Expander = evidence accordion */
+div[data-testid="stExpander"] {
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: var(--surface); box-shadow: none;
+  transition: border-color var(--motion-normal) ease;
+}
+div[data-testid="stExpander"]:hover { border-color: var(--border-hover); }
+div[data-testid="stExpander"] summary { font-weight: 600; font-size: .92rem; }
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] { gap: var(--s5); border-bottom: 1px solid var(--border); }
+.stTabs [data-baseweb="tab"] {
+  font-weight: 600; font-size: .92rem; padding: var(--s3) 0; color: var(--muted);
+  transition: color var(--motion-fast) ease;
+}
+.stTabs [data-baseweb="tab"]:hover { color: var(--primary-dark); }
+.stTabs [aria-selected="true"] { color: var(--primary-dark); }
+
+/* Progress */
+.stProgress > div > div > div {
+  background: var(--primary);
+  transition: width var(--motion-slow) var(--ease);
+}
+
+/* Focus ring — never removed */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(23,107,85,.14);
+  border-color: var(--primary);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 860px) {
+  .sahulat-nav { display: none; }
+}
+@media (max-width: 640px) {
+  .stMain .block-container { padding-left: var(--s4); padding-right: var(--s4); }
+  .sa-hero-title { font-size: 1.85rem; }
+  .sa-stepper { overflow-x: auto; }
+  .sa-steplabel { display: none; }
+  .sa-stepitem { flex: 0 0 auto; }
+  .sa-inline-trust { gap: var(--s3); }
+  .sahulat-header { padding: var(--s3) var(--s4); }
+  .sahulat-category:hover { transform: translateY(-2px); }
+  .sahulat-path { display: none; }
+  .sahulat-path-mobile { display: block; }
+}

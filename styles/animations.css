@@ -1,0 +1,87 @@
+/* ===========================================================================
+   Sahulat AI — motion
+   Core rule: motion explains, guides or rewards an action. It never competes
+   with content. Everything here is CSS-only, so a Streamlit rerun cannot
+   desynchronise it, and reveal classes are gated in Python so they play on a
+   real state change rather than on every rerun.
+   =========================================================================== */
+
+@keyframes sahulatReveal {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes sahulatFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes sahulatDrawPath {
+  from { stroke-dashoffset: 1000; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes sahulatPopIn {
+  from { opacity: 0; transform: scale(.8); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes sahulatStageSlide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(360%); }
+}
+@keyframes sahulatStageRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(23, 107, 85, .22); }
+  50%      { box-shadow: 0 0 0 5px rgba(23, 107, 85, 0); }
+}
+
+/* Block-level entrance — animate whole blocks, never every small element */
+.sahulat-reveal {
+  animation: sahulatReveal var(--motion-reveal) var(--ease) both;
+}
+
+/* Staggered siblings: 70-90ms apart, whole sequence resolves under a second */
+.sahulat-stagger-1 { animation-delay: 0ms; }
+.sahulat-stagger-2 { animation-delay: 80ms; }
+.sahulat-stagger-3 { animation-delay: 160ms; }
+.sahulat-stagger-4 { animation-delay: 240ms; }
+.sahulat-stagger-5 { animation-delay: 320ms; }
+.sahulat-stagger-6 { animation-delay: 400ms; }
+
+/* The Sahulat Path draws once, left to right, then stays static */
+.sahulat-path-line {
+  stroke-dasharray: 1000;
+  animation: sahulatDrawPath var(--motion-slow) var(--ease) both;
+}
+.sahulat-path-node {
+  animation: sahulatPopIn var(--motion-normal) var(--ease) both;
+}
+.sahulat-path-node-1 { animation-delay: 260ms; }
+.sahulat-path-node-2 { animation-delay: 340ms; }
+.sahulat-path-node-3 { animation-delay: 420ms; }
+.sahulat-path-node-4 { animation-delay: 500ms; }
+
+/* Status dot settles once on first render — never a continuous pulse */
+.sahulat-dot-settle { animation: sahulatFade var(--motion-reveal) var(--ease) both; }
+
+/* ---------------------------------------------------------------------------
+   Reduced motion — non-negotiable. The product stays fully usable with zero
+   animation; nothing here hides content or depends on a transition finishing.
+   --------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  .stButton > button:hover,
+  .sahulat-category:hover { transform: none; }
+
+  /* The blanket 1ms rule above would make a looping indicator strobe, and a
+     38%-wide bar frozen mid-track would read as "38% complete", which is a
+     number we do not have. Under reduced motion the stage indicator becomes a
+     still, full-width bar: present, honest, motionless. */
+  .sa-stage-track > span {
+    animation: none !important; width: 100%; opacity: .55;
+  }
+  .sa-stage.is-active .sa-stage-dot { animation: none !important; }
+  .sa-stage.is-pending { filter: none; opacity: .55; }
+}
