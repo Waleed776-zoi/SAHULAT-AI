@@ -132,6 +132,8 @@ sahulat_ai/
 │   ├── ad_reader.py                # Turns an uploaded file into an Opportunity via Gemini
 │   ├── rag_engine.py                # Retrieval for follow-up chat (Chroma or keyword fallback)
 │   └── i18n.py                     # English/Urdu UI strings
+├── assets/                         # Generated logo files — see core/brand.py
+│   └── sahulat-logo-*.svg          # never hand-edit; a test guards them
 ├── data/opportunities/
 │   ├── schema.json                 # Documents the shared record shape (not a real record)
 │   ├── hec_balochistan_fata.json   # verified 2026-09-12
@@ -140,7 +142,7 @@ sahulat_ai/
 │   ├── navttc_courses.json         # 7 course records, verified 2026-09-12
 │   ├── government_jobs.json        # 10 job records, verified 2026-09-12
 │   └── public_assistance.json      # 10 assistance records, verified 2026-09-12
-└── tests/                          # 318 passing tests
+└── tests/                          # 394 passing tests
     ├── test_rules_engine.py        # the deterministic engine
     ├── test_core_modules.py        # data loading, verification state, i18n
     ├── test_jobs_catalogue.py      # catalogue vocabulary + jobs guards

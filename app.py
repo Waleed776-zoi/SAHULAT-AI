@@ -29,6 +29,7 @@ from pathlib import Path
 import streamlit as st
 
 from core.ad_reader import build_record, extract_raw, read_ad
+from core.brand import mark_svg
 from core.data_loader import (
     KNOWN_CATEGORIES, catalogue_health, category_counts, load_all_opportunities,
 )
@@ -72,8 +73,14 @@ from core.validation import (
     RESULTS_STEP_INDEX, STEPS, completion_percent, validate_step,
 )
 
+# The favicon is generated from the same geometry as everything else, so the
+# tab icon cannot drift away from the logo in the header. Resolved from this
+# file rather than the working directory, which Streamlit does not guarantee.
+FAVICON = Path(__file__).resolve().parent / "assets" / "sahulat-favicon.svg"
+
 st.set_page_config(
     page_title="Sahulat AI — Pakistan's Opportunity Navigator",
+    page_icon=str(FAVICON) if FAVICON.exists() else None,
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -605,13 +612,16 @@ health = catalogue_health(opportunities)
 # Brand bar  (replaces the sidebar entirely - spec sections 12 and 31)
 # ---------------------------------------------------------------------------
 
-LOGO_MARK = (
-    '<svg class="sahulat-logo-mark" viewBox="0 0 24 24" fill="none" '
-    'stroke="#176B55" stroke-width="2" stroke-linecap="round" aria-hidden="true">'
-    '<path d="M3 20 C 9 20, 9 4, 15 4"/><circle cx="3" cy="20" r="1.6" fill="#176B55"/>'
-    '<circle cx="15" cy="4" r="1.6" fill="#123B32"/><path d="M18 9 L21 4 L21 9 Z" '
-    'fill="#B98227" stroke="none"/></svg>'
-)
+def logo_mark(animate: bool = False) -> str:
+    """
+    The Guided Opportunity Mark, from core.brand.
+
+    Drawn there rather than here so the header, the favicon and the exported
+    files in assets/ cannot drift apart. `animate` draws the stroke once per
+    session - the brand guide asks for it on first load only, never on every
+    Streamlit rerun, which is what should_animate() already tracks.
+    """
+    return mark_svg(size=26, animate=animate)
 
 
 def render_language_picker() -> None:
@@ -647,7 +657,7 @@ def render_header() -> None:
     brand, picker = st.columns([3.4, 1], vertical_alignment="center")
     with brand:
         st.markdown(
-            f'<div class="sa-brandbar">{LOGO_MARK}'
+            f'<div class="sa-brandbar">{logo_mark(animate=should_animate("logo"))}'
             f'<span class="sahulat-logo-name">{t("app_title", lang)}</span>'
             f'<span class="sahulat-logo-sep">·</span>'
             f'<span class="sahulat-logo-ur">{t("brand_urdu", lang)}</span></div>',
