@@ -22,12 +22,14 @@
     "special_quota_note": "string or null, e.g. exemptions for orphans / BPS 1-4 govt employees' children",
     "min_experience_years": "number or null, used for job/category=job entries only",
     "deadline_is_provisional": "true when application_deadline is a placeholder for an expected cycle rather than an announced date. The UI labels it as provisional.",
+    "enrolment_is_continuous": "true when the programme accepts applications all year and there is no closing date to miss. NOT the same as leaving application_deadline null, which means 'we do not have a date' - the UI tells a user to go and check in that case, and tells them there is nothing to miss in this one. Set this only when the programme genuinely never closes; if it is also given a real deadline, the deadline wins.",
     "application_deadline": "YYYY-MM-DD or null, used for job/category=job entries only (jobs go stale - always check this)",
     "gender_required": "one of: female | male | any | null (null = no gender restriction). Use only when the programme genuinely reserves places by gender.",
     "min_english_level": "one of: none | basic | intermediate | fluent | null",
     "min_computer_skills": "one of: none | basic | intermediate | advanced | null",
     "fields_of_study": "list of study fields the programme is restricted to, or null (null = open to all fields). Allowed values are listed in core/models.FIELDS_OF_STUDY",
-    "priority_groups": "list of groups this programme gives PRIORITY to, or null. An ADVANTAGE ONLY - never used to exclude anyone. Allowed: female | disability | orphan | minority | under_served_district. Only add a group if the official source actually states it."
+    "priority_groups": "list of groups this programme gives PRIORITY to, or null. An ADVANTAGE ONLY - never used to exclude anyone. Allowed: female | disability | orphan | minority | under_served_district. Only add a group if the official source actually states it.",
+    "required_groups": "list of groups this programme is RESTRICTED to, or null. A GATE, unlike priority_groups above - use it only where the group IS the eligibility, such as an orphans' home or a disability stipend. Read as OR: belonging to any one of them qualifies. Allowed values are ONLY female | disability | orphan, because nothing in a non-identifying profile can establish religion or district; gating on minority or under_served_district would create an UNKNOWN no user could ever resolve. An unanswered profile field produces 'unknown' (a question), never 'unmet' (a rejection)."
   },
   "required_documents": [
     "list of strings"

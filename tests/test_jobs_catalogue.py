@@ -27,6 +27,7 @@ from core.data_loader import (KNOWN_CATEGORIES, category_counts,
 from core.models import (COMPUTER_LEVELS, EDUCATION_LEVELS, ENGLISH_LEVELS,
                          FIELDS_OF_STUDY, GENDERS, PRIORITY_GROUPS, PROVINCES,
                          parse_iso_date, sample_profile, MET)
+from core.i18n import LANGUAGES
 from core.rules_engine import evaluate
 from core.timeliness import (deadline_urgency, should_prompt_verification,
                              URGENCY_UNKNOWN, URGENCY_PASSED)
@@ -254,7 +255,10 @@ class TestFreshnessPhrasing(unittest.TestCase):
     def test_verified_today_does_not_say_zero_days(self):
         from core.i18n import describe_freshness
         from core.timeliness import FRESH_RECENT
-        for lang in ("en", "ur", "roman"):
+        # LANGUAGES, not a hand-written list: "roman" is not a language code
+        # ("ur_roman" is), so a literal list silently tested English three
+        # times instead of failing.
+        for lang in LANGUAGES:
             _, detail = describe_freshness(FRESH_RECENT, 0, lang)
             self.assertNotIn("0", detail, f"{lang}: {detail!r}")
             self.assertTrue(detail.strip(), f"{lang} has no freshness detail")

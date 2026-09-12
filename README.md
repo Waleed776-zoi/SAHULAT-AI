@@ -138,11 +138,13 @@ sahulat_ai/
 │   ├── peef_punjab.json            # verified 2026-09-12
 │   ├── navttc_hunarmand.json       # verified 2026-09-12
 │   ├── navttc_courses.json         # 7 course records, verified 2026-09-12
-│   └── government_jobs.json        # 10 job records — NEEDS VERIFICATION (Step 8)
-└── tests/                          # 288 passing tests
+│   ├── government_jobs.json        # 10 job records, verified 2026-09-12
+│   └── public_assistance.json      # 10 assistance records, verified 2026-09-12
+└── tests/                          # 318 passing tests
     ├── test_rules_engine.py        # the deterministic engine
     ├── test_core_modules.py        # data loading, verification state, i18n
     ├── test_jobs_catalogue.py      # catalogue vocabulary + jobs guards
+    ├── test_assistance_catalogue.py # group gates + always-open enrolment
     ├── test_app_ui.py              # Streamlit AppTest regressions
     └── test_v2_features.py, test_p1_features.py, test_p2_features.py
 ```

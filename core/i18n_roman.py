@@ -227,6 +227,7 @@ ROMAN: Dict[str, str] = {
     "path_scholarship": "Scholarship dhoondein",
     "path_job": "Naukri dhoondein",
     "path_skills": "Hunar seekhein",
+    "path_assistance": "Madad dhoondein",
     "path_check_ad": "Ishtihar ki jaanch karein",
     "path_start": "Yahan se shuru karein",
     "home_upload_hint": "Upar diya 'Ad parhwayein' tab istemaal karein.",
@@ -390,6 +391,13 @@ ROMAN: Dict[str, str] = {
 
     # -- provisional deadlines --------------------------------------------
     "deadline_provisional_badge": "Aarzi tareekh",
+
+    # -- always-open enrolment --------------------------------------------
+    "listing_always_open": "Hamesha khula",
+    "urgency_continuous": "Koi aakhri tareekh nahi",
+    "urgency_continuous_note": "Yeh program saara saal darkhwastein qabool karta hai. Koi aakhri "
+                               "tareekh nahi jo nikal jaye - lekin manzoori ka inhesaar upar di "
+                               "gayi sharait aur darkhwast ke waqt funds ki dastyabi par hai.",
     "deadline_provisional_note": "Yeh tareekh mutawaqqa marhale ke liye hamari aarzi tareekh hai, "
                                  "idare ki elan karda nahi. Ginti ko andaza samjhein aur official "
                                  "page par tasdeeq karein.",

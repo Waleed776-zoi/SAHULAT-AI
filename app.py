@@ -48,7 +48,7 @@ from core.llm_client import (
 )
 from core.models import (
     COMPUTER_LEVELS, EDUCATION_LEVELS, ENGLISH_LEVELS, FIELDS_OF_STUDY, GENDERS,
-    LISTING_CLOSED, LISTING_OPEN, MET, PROVINCES, STATUS_ELIGIBLE,
+    LISTING_ALWAYS_OPEN, LISTING_CLOSED, LISTING_OPEN, MET, PROVINCES, STATUS_ELIGIBLE,
     STATUS_NEEDS_VERIFICATION, STATUS_NOT_ELIGIBLE, UNKNOWN, UNMET, UserProfile,
     sample_profile,
 )
@@ -59,8 +59,9 @@ from core.next_action import (
 )
 from core.readiness import readiness
 from core.timeliness import (
-    URGENCY_PASSED, URGENCY_UNKNOWN, days_remaining, days_since_verified,
-    deadline_urgency, record_freshness, should_prompt_verification,
+    URGENCY_CONTINUOUS, URGENCY_PASSED, URGENCY_UNKNOWN, days_remaining,
+    days_since_verified, deadline_urgency, match_urgency, record_freshness,
+    should_prompt_verification,
 )
 from core.rules_engine import (
     evaluate, evaluate_all, ranking_factors, summarize_counts, top_matches,
@@ -89,7 +90,8 @@ STATUS_CLASS = {
     STATUS_NEEDS_VERIFICATION: "tone-verify",
     STATUS_NOT_ELIGIBLE: "tone-no",
 }
-LISTING_CLASS = {LISTING_OPEN: "tone-good", LISTING_CLOSED: "tone-mute"}
+LISTING_CLASS = {LISTING_OPEN: "tone-good", LISTING_CLOSED: "tone-mute",
+                 LISTING_ALWAYS_OPEN: "tone-good"}
 CHECK_MARK = {MET: "✓", UNMET: "✕", UNKNOWN: "!"}
 CHECK_CLASS = {MET: "mark-good", UNMET: "mark-no", UNKNOWN: "mark-verify"}
 
@@ -553,9 +555,14 @@ def render_home() -> None:
     # The fourth path is not a category: it is the Lens. Leaving it out of the
     # landing page hid the feature most likely to be the demo moment.
     section_label(t("home_paths_heading", lang))
-    path_cols = st.columns(4)
+    # One card per category, plus the Lens. The Lens is not a category - it was
+    # promoted onto the landing page because leaving it in a tab hid the
+    # feature most likely to be the demo moment. Public assistance joined the
+    # row when DATA-07 filled it: a category with records and no way in from
+    # the landing page is reachable only by someone who knows to go looking.
+    path_cols = st.columns(5)
     paths = (("scholarship", "path_scholarship"), ("job", "path_job"),
-             ("skills", "path_skills"))
+             ("skills", "path_skills"), ("assistance", "path_assistance"))
     for column, (category, label_key) in zip(path_cols, paths):
         with column:
             with st.container(border=True):
@@ -568,7 +575,7 @@ def render_home() -> None:
                     go_to(1)          # focus step is already answered for them
                 if not available:
                     st.caption(t("coming_soon", lang))
-    with path_cols[3]:
+    with path_cols[4]:
         with st.container(border=True):
             st.markdown(f"**{t('path_check_ad', lang)}**")
             st.caption(t("path_check_ad_body", lang))
@@ -1526,7 +1533,9 @@ def render_deadline(match) -> None:
     asks that users are never encouraged toward a closed application, and
     silence next to a full document checklist is a form of encouragement.
     """
-    urgency = deadline_urgency(match.deadline)
+    # match_urgency, not deadline_urgency: only the whole result knows whether
+    # a missing date means "never closes" or "we do not have one".
+    urgency = match_urgency(match)
     days = days_remaining(match.deadline)
     label, detail = describe_urgency(urgency, days, lang)
 
@@ -1536,10 +1545,10 @@ def render_deadline(match) -> None:
         + (f'<span class="sa-deadline-detail">{detail}</span>' if detail and days is not None
            else "")
         + (f'<span class="sa-deadline-date">{match.deadline}</span>'
-           if match.deadline and urgency not in (URGENCY_UNKNOWN,) else "")
+           if match.deadline and urgency not in (URGENCY_UNKNOWN, URGENCY_CONTINUOUS) else "")
         + '</div>', unsafe_allow_html=True)
 
-    if match.deadline_is_provisional and urgency != URGENCY_UNKNOWN:
+    if match.deadline_is_provisional and urgency not in (URGENCY_UNKNOWN, URGENCY_CONTINUOUS):
         # A countdown is the most confident thing on this page. If the date
         # behind it is our placeholder rather than an announcement, the page
         # has to say so where the countdown is, not in a footnote.
@@ -1547,7 +1556,9 @@ def render_deadline(match) -> None:
                     unsafe_allow_html=True)
         st.caption(t("deadline_provisional_note", lang))
 
-    if urgency == URGENCY_UNKNOWN:
+    if urgency == URGENCY_CONTINUOUS:
+        st.caption(t("urgency_continuous_note", lang))
+    elif urgency == URGENCY_UNKNOWN:
         st.caption(t("urgency_unknown_note", lang))
     elif urgency == URGENCY_PASSED:
         st.caption(t("urgency_passed_note", lang))
@@ -1747,7 +1758,8 @@ def trust_badge(opportunity) -> str:
 def listing_badge(match) -> str:
     state = match.listing_state()
     label = {LISTING_OPEN: t("listing_open", lang),
-             LISTING_CLOSED: t("listing_closed", lang)}.get(
+             LISTING_CLOSED: t("listing_closed", lang),
+             LISTING_ALWAYS_OPEN: t("listing_always_open", lang)}.get(
         state, t("listing_verify_cycle", lang))
     return badge(label, LISTING_CLASS.get(state, "tone-verify"))
 
