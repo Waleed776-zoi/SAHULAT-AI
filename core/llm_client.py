@@ -48,6 +48,50 @@ SDK_NEW = "google-genai"
 SDK_LEGACY = "google-generativeai"
 
 
+# Reasons an answer is not a real model answer. Machine values; i18n words them.
+REASON_OFFLINE = "offline"          # no key configured
+REASON_ERROR = "error"              # the call failed
+REASON_NO_EVIDENCE = "no_evidence"  # nothing grounded to answer from
+
+
+class AiText(str):
+    """
+    A model answer that knows whether it actually is one (P2-5).
+
+    A plain string cannot tell the UI the difference between an explanation
+    and the sentence we print when the call failed, so both used to render
+    identically - in the same blue box, looking equally authoritative. That is
+    the failure this class exists to prevent.
+
+    It subclasses `str` deliberately: every existing caller keeps working
+    unchanged, and the extra state is additive rather than a migration.
+    """
+    ok: bool
+    reason: str
+
+    def __new__(cls, text: str, ok: bool = True, reason: str = ""):
+        value = super().__new__(cls, text)
+        value.ok = ok
+        value.reason = reason
+        return value
+
+
+def _language_instruction(language: str) -> str:
+    """
+    How to tell the model which language to answer in (P2-1).
+
+    Roman Urdu needs spelling out: asked for "Urdu", a model returns Urdu
+    script, which is precisely what a Roman Urdu reader chose not to have.
+    """
+    if language == "ur":
+        return "Respond in Urdu."
+    if language == "ur_roman":
+        return ("Respond in Roman Urdu - the Urdu language written in Latin script, "
+                "the way Pakistanis type in everyday messages. Do NOT use Urdu script. "
+                "Keep common English words (scholarship, documents, deadline) as they are.")
+    return "Respond in English."
+
+
 def _get_secret(name: str) -> Optional[str]:
     """Read a setting from the environment, else from Streamlit secrets."""
     value = os.environ.get(name)
@@ -201,11 +245,20 @@ STRICT RULES:
 """
 
 
-def explain_match(profile_summary: str, match_result_summary: str, language: str = "en") -> str:
-    if _client() is None:
-        return _mock_explanation(match_result_summary, language)
+def explain_match(profile_summary: str, match_result_summary: str,
+                  language: str = "en") -> AiText:
+    """
+    Plain-language explanation of a decision the rules engine already made.
 
-    lang_instruction = "Respond in Urdu." if language == "ur" else "Respond in English."
+    Always returns an AiText. When `.ok` is False the text is a notice, not an
+    explanation, and the UI must present it as such - the eligibility result
+    itself is rules-based and unaffected either way.
+    """
+    if _client() is None:
+        return AiText(_mock_explanation(match_result_summary, language),
+                      ok=False, reason=REASON_OFFLINE)
+
+    lang_instruction = _language_instruction(language)
     prompt = (
         f"{lang_instruction}\n\n"
         f"User profile:\n{profile_summary}\n\n"
@@ -213,14 +266,95 @@ def explain_match(profile_summary: str, match_result_summary: str, language: str
         f"{match_result_summary}"
     )
     try:
-        return _generate(EXPLAIN_SYSTEM_PROMPT, [prompt])
+        return AiText(_generate(EXPLAIN_SYSTEM_PROMPT, [prompt]))
     except Exception as exc:
         log.warning("explain_match failed: %s", exc)
-        return t("ai_unavailable", language)
+        # The exception text is logged, never shown: "Gemini API error 429"
+        # tells a scholarship applicant nothing they can act on.
+        return AiText(t("ai_unavailable", language), ok=False, reason=REASON_ERROR)
 
 
 def _mock_explanation(match_result_summary: str, language: str) -> str:
     return f"{t('ai_mock_notice', language)}\n\n{match_result_summary}"
+
+
+SIMPLIFY_SYSTEM_PROMPT = """You rewrite Pakistani government opportunity
+listings into plain, simple language for someone who finds official documents
+hard to read. Many readers have limited formal education, so write the way you
+would speak to a neighbour.
+
+YOU ARE A TRANSLATOR, NOT AN ADVISOR. Every sentence you write must be
+traceable to a fact given to you below.
+
+ABSOLUTE RULES:
+- Use ONLY the facts provided. Never add a requirement, amount, date, quota or
+  benefit that is not written in them. A reader may miss a real deadline or
+  give up on a scholarship they qualify for because of an invented detail.
+- Never simplify a condition into something weaker or stronger. "At least 60%
+  marks" does not become "good marks". Keep every number exactly as given.
+- Never say whether this particular reader is eligible, likely to be selected,
+  or should apply. That decision is made elsewhere and is not yours.
+- If a section has no facts to draw on, say plainly that the document does not
+  state it. Do not fill the gap.
+- Short sentences. No jargon. No bureaucratic phrasing.
+
+Return ONLY valid JSON, no markdown fences, exactly this shape:
+
+{
+  "who_is_this_for": string,
+  "what_you_get": string,
+  "who_can_apply": string,
+  "what_you_need": string,
+  "where_to_apply": string
+}
+"""
+
+SIMPLIFY_SECTIONS = ("who_is_this_for", "what_you_get", "who_can_apply",
+                     "what_you_need", "where_to_apply")
+
+
+def simplify_opportunity(facts: str, language: str = "en") -> Dict[str, Any]:
+    """
+    Plain-language version of one opportunity (P1-7).
+
+    `facts` must contain ONLY what the record itself states - the caller builds
+    it from structured fields, never from an eligibility result. The model is
+    given no profile and no verdict, so it has nothing to reinterpret: it
+    cannot tell the reader they qualify because it has not been told.
+
+    Returns a dict of the sections above, plus "_error"/"_mock" markers the UI
+    uses to label the output honestly. Never raises.
+    """
+    if _client() is None:
+        return {**_mock_simplification(facts, language), "_mock": True}
+
+    lang_instruction = _language_instruction(language) + " Use simple words."
+    try:
+        raw = _generate(SIMPLIFY_SYSTEM_PROMPT,
+                        [f"{lang_instruction}\n\nFacts from the record:\n{facts}"])
+    except Exception as exc:
+        log.warning("simplify_opportunity failed: %s", exc)
+        return {"_error": str(exc)}
+
+    try:
+        parsed = json.loads(_strip_code_fences(raw))
+        if not isinstance(parsed, dict):
+            raise ValueError("Top-level JSON value is not an object")
+    except (json.JSONDecodeError, ValueError) as exc:
+        log.warning("simplify_opportunity returned non-JSON: %s", exc)
+        return {"_error": str(exc), "_raw_model_output": raw}
+
+    # Keep only the sections we asked for, as strings. An unexpected key is
+    # not rendered: this output goes on screen as plain guidance, so anything
+    # unrecognised is dropped rather than displayed.
+    return {section: str(parsed[section]).strip()
+            for section in SIMPLIFY_SECTIONS
+            if isinstance(parsed.get(section), (str, int, float)) and str(parsed[section]).strip()}
+
+
+def _mock_simplification(facts: str, language: str) -> Dict[str, Any]:
+    """Offline stand-in. Clearly labelled, and invents nothing."""
+    return {"who_can_apply": f"{t('ai_mock_notice', language)}\n\n{facts}"}
 
 
 # ---------------------------------------------------------------------------
@@ -236,23 +370,33 @@ evidence. Keep answers short and cite which opportunity the evidence came from.
 """
 
 
-def answer_followup(question: str, evidence_snippets: List[str], language: str = "en") -> str:
+def answer_followup(question: str, evidence_snippets: List[str],
+                    language: str = "en") -> AiText:
+    """
+    Answer a question from supplied evidence only. Always returns an AiText.
+
+    `.ok` is False for all three non-answers - no evidence, no key, failed
+    call - because each of them is a notice the UI must present differently
+    from an answer, however similar they look as text.
+    """
     # No evidence means no grounded answer is possible. Say so rather than
     # letting the model improvise (BUG-06).
     if not evidence_snippets:
-        return t("no_evidence_found", language)
+        return AiText(t("no_evidence_found", language),
+                      ok=False, reason=REASON_NO_EVIDENCE)
 
     if _client() is None:
-        return _mock_chat_answer(question, language)
+        return AiText(_mock_chat_answer(question, language),
+                      ok=False, reason=REASON_OFFLINE)
 
-    lang_instruction = "Respond in Urdu." if language == "ur" else "Respond in English."
+    lang_instruction = _language_instruction(language)
     evidence_block = "\n---\n".join(evidence_snippets)
     prompt = f"{lang_instruction}\n\nEvidence:\n{evidence_block}\n\nQuestion: {question}"
     try:
-        return _generate(CHAT_SYSTEM_PROMPT, [prompt])
+        return AiText(_generate(CHAT_SYSTEM_PROMPT, [prompt]))
     except Exception as exc:
         log.warning("answer_followup failed: %s", exc)
-        return t("ai_unavailable", language)
+        return AiText(t("ai_unavailable", language), ok=False, reason=REASON_ERROR)
 
 
 def _mock_chat_answer(question: str, language: str) -> str:
@@ -272,6 +416,11 @@ STRICT RULES:
   stated in the document, set it to null. NEVER guess or fill in a
   plausible-sounding value.
 - Do not translate or infer eligibility rules that are not explicitly written.
+- "gender_required" is ONLY for a document that explicitly restricts applications
+  to one gender. A scholarship that merely mentions women, or prioritises them,
+  is NOT gender-restricted: leave it null. Getting this wrong wrongly excludes
+  people, which is worse than leaving a condition unread.
+- "province_scope" is the region the opportunity covers, if the document says so.
 - Return ONLY valid JSON matching this schema, nothing else, no markdown fences:
 
 {
@@ -279,6 +428,7 @@ STRICT RULES:
   "category": one of "scholarship" | "job" | "skills" | "assistance" | null,
   "provider": string or null,
   "summary_en": string or null,
+  "province_scope": string or null,
   "eligibility_conditions": {
     "min_age": number or null,
     "max_age": number or null,
@@ -290,6 +440,8 @@ STRICT RULES:
     "must_not_have_existing_scholarship": boolean or null,
     "employment_status_required": one of "unemployed"|"employed"|"any" or null,
     "min_experience_years": number or null,
+    "gender_required": one of "female"|"male" or null,
+    "fields_of_study": [string] or null,
     "application_deadline": "YYYY-MM-DD" or null
   },
   "required_documents": [string],

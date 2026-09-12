@@ -413,12 +413,45 @@ class TestListingState(unittest.TestCase):
         self.assertEqual(self._match("REPLACE ME", date(2026, 6, 1)).listing_state(),
                          LISTING_VERIFY)
 
-    def test_curated_records_never_claim_open(self):
-        from core.models import LISTING_OPEN
+    def test_open_is_only_claimed_with_a_real_future_deadline(self):
+        """
+        This test used to assert no curated record was ever "Open", which was
+        true of the data at the time rather than a rule. Now that records
+        carry deadlines (DATA-02), the invariant worth protecting is the one
+        that was always meant: "Open" requires a real, parseable, future date.
+        """
+        from core.models import LISTING_OPEN, parse_iso_date
+        from core.rules_engine import evaluate_all
+        from datetime import date
+        for result in evaluate_all(UserProfile(), load_all_opportunities()):
+            if result.listing_state() == LISTING_OPEN:
+                parsed = parse_iso_date(result.deadline)
+                self.assertIsNotNone(parsed, result.opportunity.opportunity_id)
+                self.assertGreaterEqual(parsed, date.today(),
+                                        result.opportunity.opportunity_id)
+
+    def test_a_provisional_deadline_is_flagged_all_the_way_to_the_result(self):
+        """
+        DATA-02: a deadline we invented as a stand-in must stay distinguishable
+        from one an authority published, or the countdown reads as fact.
+        """
         from core.rules_engine import evaluate_all
         for result in evaluate_all(UserProfile(), load_all_opportunities()):
-            self.assertNotEqual(result.listing_state(), LISTING_OPEN,
-                                "no curated record has a verified deadline yet")
+            conditions = result.opportunity.eligibility_conditions
+            self.assertEqual(result.deadline_is_provisional,
+                             conditions.deadline_is_provisional,
+                             result.opportunity.opportunity_id)
+
+    def test_every_curated_deadline_is_currently_provisional(self):
+        """
+        None of these cycles have been announced. If a real date is ever
+        entered, this test should be updated deliberately - not silently.
+        """
+        for record in load_all_opportunities():
+            conditions = record.eligibility_conditions
+            if conditions.application_deadline:
+                self.assertTrue(conditions.deadline_is_provisional,
+                                record.opportunity_id)
 
 
 class TestSampleProfile(unittest.TestCase):

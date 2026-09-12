@@ -13,7 +13,7 @@ text at render time. See PROJECT_TRACKER.md I18N-02.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 
@@ -193,6 +193,11 @@ class EligibilityConditions:
     special_quota_note: Optional[str] = None
     min_experience_years: Optional[float] = None
     application_deadline: Optional[str] = None          # YYYY-MM-DD
+    # True when the date above is a stand-in for a cycle that has not been
+    # announced yet, rather than a date an authority has published. A deadline
+    # renders as a countdown - the most confident statement on the page - so
+    # the difference has to survive all the way to the UI.
+    deadline_is_provisional: bool = False
     # Added 2026-09-11 to support finer shortlisting.
     gender_required: Optional[str] = None               # female | male | any
     min_english_level: Optional[str] = None             # none | basic | intermediate | fluent
@@ -291,6 +296,7 @@ class Opportunity:
             special_quota_note=ec.get("special_quota_note"),
             min_experience_years=ec.get("min_experience_years"),
             application_deadline=ec.get("application_deadline"),
+            deadline_is_provisional=bool(ec.get("deadline_is_provisional", False)),
             gender_required=ec.get("gender_required"),
             min_english_level=ec.get("min_english_level"),
             min_computer_skills=ec.get("min_computer_skills"),
@@ -349,6 +355,7 @@ class MatchResult:
     # ineligible. Tracked separately so the UI can say so.
     listing_closed: bool = False
     deadline: Optional[str] = None
+    deadline_is_provisional: bool = False
     # Priority groups this profile matches. Advantages only - never a gate.
     matched_priority_groups: List[str] = field(default_factory=list)
 
@@ -379,6 +386,56 @@ class MatchResult:
         if not applicable:
             return 1.0
         return self.count(MET) / len(applicable)
+
+    # -- V2 P0-1 / P0-2: the scorecard, as structure ------------------------
+    # These return ConditionCheck objects, never sentences. core/i18n.py
+    # renders them; keeping prose out of here is what lets the engine stay
+    # language-free and independently testable.
+
+    def satisfied(self) -> List[ConditionCheck]:
+        """Conditions the profile demonstrably meets."""
+        return [c for c in self.applicable_checks() if c.status == MET]
+
+    def blockers(self) -> List[ConditionCheck]:
+        """
+        Conditions the profile demonstrably fails.
+
+        These are decisive: one blocker is what makes the whole result
+        "not eligible", regardless of how many others passed.
+        """
+        return [c for c in self.applicable_checks() if c.status == UNMET]
+
+    def gaps(self) -> List[ConditionCheck]:
+        """
+        Conditions that could not be checked because the profile is missing
+        the answer. NOT failures - unanswered is not the same as unqualified.
+        """
+        return [c for c in self.applicable_checks() if c.status == UNKNOWN]
+
+    def scorecard(self) -> Dict[str, int]:
+        """
+        Counts behind the scorecard header (P0-1).
+
+        Deliberately a count of conditions, not a percentage of "fit". The
+        spec allows "another clearly defined profile-match representation",
+        and "4 of 5 stated conditions met" is checkable against the rows
+        immediately below it - a percentage would imply a probability of
+        success that no rule in this system computes.
+        """
+        applicable = self.applicable_checks()
+        return {
+            "met": self.count(MET),
+            "unmet": self.count(UNMET),
+            "unknown": self.count(UNKNOWN),
+            "total": len(applicable),
+        }
+
+    def days_until_deadline(self, today=None) -> Optional[int]:
+        """Days remaining, or None when no real deadline is on record."""
+        parsed = parse_iso_date(self.deadline)
+        if parsed is None:
+            return None
+        return (parsed - (today or date.today())).days
 
 
 def sample_profile() -> UserProfile:

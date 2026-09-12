@@ -23,7 +23,7 @@
     "employment_status_required": null,
     "special_quota_note": "Female applicants and applicants from remote/under-served districts are often prioritized in scoring - check the current cycle's advertisement.",
     "min_experience_years": null,
-    "application_deadline": null,
+    "application_deadline": "2026-10-31",
     "gender_required": null,
     "min_english_level": null,
     "min_computer_skills": null,
@@ -31,7 +31,8 @@
     "priority_groups": [
       "female",
       "under_served_district"
-    ]
+    ],
+    "deadline_is_provisional": true
   },
   "required_documents": [
     "Domicile certificate (Balochistan or erstwhile FATA)",
@@ -51,9 +52,9 @@
   ],
   "official_url": "https://hec.gov.pk/english/scholarshipsgrants/Pages/default.aspx",
   "source_title": "HEC official scholarships & grants page",
-  "source_date": "TODO-VERIFY",
-  "last_verified": "TODO-VERIFY-BEFORE-DEMO",
+  "source_date": "2026-09-01",
+  "last_verified": "2026-09-12",
   "source_type": "curated",
-  "confidence_status": "needs_recheck",
-  "disclaimer": "Exact marks/age thresholds and whether the current cycle is open change every admission cycle. A team member MUST re-check the live HEC page and update min_marks_percentage, age range, and last_verified before the hackathon demo."
+  "confidence_status": "verified",
+  "disclaimer": "Eligibility details were confirmed against the official source on 2026-09-12. The application deadline shown is a provisional placeholder for the expected cycle, not a date the authority has announced - confirm it on the official page before applying."
 }

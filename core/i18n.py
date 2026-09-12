@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple
 
+from core.i18n_roman import ROMAN
 from core.models import (
     ConditionCheck,
     STATUS_ELIGIBLE, STATUS_NEEDS_VERIFICATION, STATUS_NOT_ELIGIBLE,
@@ -22,6 +23,35 @@ from core.models import (
     CHECK_EXPERIENCE, CHECK_DEADLINE, CHECK_GENDER, CHECK_ENGLISH,
     CHECK_COMPUTER, CHECK_FIELD_OF_STUDY,
 )
+
+LANG_EN = "en"
+LANG_UR = "ur"
+LANG_ROMAN = "ur_roman"          # Urdu written in Latin script
+LANGUAGES = (LANG_EN, LANG_UR, LANG_ROMAN)
+
+# What each mode calls itself, in itself.
+LANGUAGE_NAMES = {
+    LANG_EN: "English",
+    LANG_UR: "\u0627\u0631\u062f\u0648",
+    LANG_ROMAN: "Roman Urdu",
+}
+
+
+def is_rtl(lang: str) -> bool:
+    """
+    Only Urdu script is right-to-left.
+
+    Roman Urdu is Urdu *language* in Latin *script*, so it lays out and sets
+    type exactly like English. Treating it as RTL - the obvious mistake, since
+    it is "the Urdu one" - would mirror the whole page for no reason.
+    """
+    return lang == LANG_UR
+
+
+def normalise_lang(lang: str) -> str:
+    """Fall back to English for anything we do not ship."""
+    return lang if lang in LANGUAGES else LANG_EN
+
 
 STRINGS: Dict[str, Dict[str, str]] = {
     # -- identity -----------------------------------------------------------
@@ -242,6 +272,328 @@ STRINGS: Dict[str, Dict[str, str]] = {
     "extracted_deadline": {"en": "Deadline stated", "ur": "آخری تاریخ درج ہے"},
     "extracted_quota": {"en": "Preference noted", "ur": "ترجیح درج ہے"},
     "extracted_category": {"en": "Read as", "ur": "کس قسم کے طور پر پڑھا گیا"},
+
+    # ================= V2 P0-1: eligibility scorecard =====================
+    "scorecard_heading": {"en": "Eligibility scorecard", "ur": "اہلیت کا تفصیلی جائزہ"},
+    "scorecard_summary": {
+        "en": "{met} of {total} stated conditions met",
+        "ur": "{total} میں سے {met} شرائط پوری"},
+    "scorecard_summary_extra": {
+        "en": "{unmet} not met · {unknown} need verification",
+        "ur": "{unmet} پوری نہیں · {unknown} کی تصدیق درکار"},
+    "scorecard_no_score_note": {
+        "en": "This is a count of the conditions below, not a percentage chance of success. "
+              "The official rules decide, not this number.",
+        "ur": "یہ نیچے دی گئی شرائط کی گنتی ہے، کامیابی کے امکان کا تناسب نہیں۔ فیصلہ سرکاری قواعد کرتے ہیں، یہ عدد نہیں۔"},
+    "col_requirement": {"en": "Requirement", "ur": "شرط"},
+    "col_your_answer": {"en": "Your information", "ur": "آپ کی معلومات"},
+    "col_result": {"en": "Result", "ur": "نتیجہ"},
+    "result_passed": {"en": "Passed", "ur": "پوری"},
+    "result_failed": {"en": "Not met", "ur": "پوری نہیں"},
+    "result_verify": {"en": "Verification required", "ur": "تصدیق درکار"},
+
+    # ================= V2 P0-2: why / why not / what changes ==============
+    "why_you_match": {"en": "Why you match", "ur": "آپ کیوں اہل ہیں"},
+    "why_you_dont": {"en": "Why you don't currently match", "ur": "آپ فی الحال کیوں اہل نہیں"},
+    "what_needs_verification": {"en": "What needs verification", "ur": "کس چیز کی تصدیق درکار ہے"},
+    "what_would_change": {"en": "What would change this", "ur": "اس میں کیا فرق ڈال سکتا ہے"},
+    "gap_line": {
+        "en": "This requires {required}. Your profile says {actual}.",
+        "ur": "اس کے لیے {required} درکار ہے۔ آپ کی معلومات کے مطابق {actual}۔"},
+    "gap_unknown_line": {
+        "en": "This requires {required}. Your profile does not answer this yet.",
+        "ur": "اس کے لیے {required} درکار ہے۔ آپ نے ابھی اس کا جواب نہیں دیا۔"},
+    "what_would_change_caveat": {
+        "en": "Meeting this does not by itself make you eligible - the other conditions "
+              "still apply, and only the awarding body decides.",
+        "ur": "صرف یہ شرط پوری کرنے سے اہلیت ثابت نہیں ہوتی — باقی شرائط بھی لاگو ہیں، اور فیصلہ متعلقہ ادارہ ہی کرتا ہے۔"},
+    "decisive_note": {
+        "en": "One unmet condition is enough to change the result, however many others passed.",
+        "ur": "ایک شرط پوری نہ ہو تو نتیجہ بدل جاتا ہے، چاہے باقی سب پوری ہوں۔"},
+
+    # ================= V2 P0-3: top matches ===============================
+    "top_matches_heading": {"en": "Your top opportunities", "ur": "آپ کے لیے بہترین مواقع"},
+    "top_matches_lede": {
+        "en": "Ranked by structured facts only - status, conditions confirmed, deadline. "
+              "No model opinion is involved in this order.",
+        "ur": "ترتیب صرف حقائق پر ہے — حیثیت، تصدیق شدہ شرائط، آخری تاریخ۔ اس ترتیب میں ماڈل کی رائے شامل نہیں۔"},
+    "top_matches_empty": {
+        "en": "Nothing qualifies for this shortlist yet. Your full results are below.",
+        "ur": "ابھی کوئی موقع اس فہرست کے لیے موزوں نہیں۔ آپ کے مکمل نتائج نیچے ہیں۔"},
+    "rank_reason_all_met": {"en": "All {total} stated conditions met", "ur": "تمام {total} شرائط پوری"},
+    "rank_reason_met": {"en": "{met} of {total} conditions met", "ur": "{total} میں سے {met} شرائط پوری"},
+    "rank_reason_priority": {"en": "you match the {groups} priority group",
+                             "ur": "آپ {groups} ترجیحی زمرے میں آتے ہیں"},
+    "rank_reason_deadline": {"en": "closes in {days} days", "ur": "{days} دن میں بند"},
+    "rank_reason_verify": {"en": "{unknown} still to confirm", "ur": "{unknown} کی تصدیق باقی"},
+
+    # ================= V2 P0-6: next best action ==========================
+    "next_step_label": {"en": "Next step", "ur": "اگلا قدم"},
+    "action_explore_others": {
+        "en": "Explore your other matching opportunities - this listing has closed.",
+        "ur": "اپنے دیگر موزوں مواقع دیکھیں — یہ اشتہار بند ہو چکا ہے۔"},
+    "action_review_blocker": {
+        "en": "Check the {subject} requirement against the official source before applying.",
+        "ur": "درخواست سے پہلے {subject} کی شرط سرکاری ذریعے سے دیکھ لیں۔"},
+    "action_answer_missing_one": {
+        "en": "Answer one more question so this can be checked - {subject}",
+        "ur": "ایک اور سوال کا جواب دیں تاکہ اسے جانچا جا سکے — {subject}"},
+    "action_answer_missing_many": {
+        "en": "Answer {count} more questions so these conditions can be checked.",
+        "ur": "{count} مزید سوالات کے جواب دیں تاکہ یہ شرائط جانچی جا سکیں۔"},
+    "action_confirm_condition": {
+        "en": "Confirm the {subject} requirement from the official source.",
+        "ur": "{subject} کی شرط سرکاری ذریعے سے تصدیق کریں۔"},
+    "action_prepare_documents": {
+        "en": "Prepare the {subject} documents this opportunity asks for.",
+        "ur": "اس موقع کے لیے مطلوبہ {subject} دستاویزات تیار کریں۔"},
+    "action_apply": {"en": "Apply through the official source.",
+                     "ur": "سرکاری ذریعے سے درخواست دیں۔"},
+    "action_check_source": {"en": "Read the official source for the current details.",
+                            "ur": "موجودہ تفصیلات کے لیے سرکاری ذریعہ پڑھیں۔"},
+    "action_answer_now": {"en": "Answer this now", "ur": "ابھی جواب دیں"},
+
+    # ================= V2 P0-7: responsible AI showcase ===================
+    "architecture_heading": {"en": "AI does not decide your eligibility",
+                             "ur": "آپ کی اہلیت کا فیصلہ AI نہیں کرتا"},
+    "architecture_body": {
+        "en": "Eligibility is computed by deterministic rules from the conditions each "
+              "authority publishes. The language model only explains a decision that has "
+              "already been made, and it cannot change one.",
+        "ur": "اہلیت کا تعین متعین قواعد سے ہوتا ہے جو ہر ادارے کی شائع کردہ شرائط پر مبنی ہیں۔ زبان کا ماڈل صرف پہلے سے کیے گئے فیصلے کی وضاحت کرتا ہے، اسے بدل نہیں سکتا۔"},
+    "architecture_upload_label": {"en": "Uploaded document", "ur": "اپلوڈ کردہ دستاویز"},
+    "architecture_curated_label": {"en": "Curated record", "ur": "ہماری تیار کردہ اندراج"},
+    "architecture_same_engine": {
+        "en": "Both paths end in the same rules engine. An uploaded poster is screened by "
+              "exactly the code that screens a curated record.",
+        "ur": "دونوں راستے ایک ہی رولز انجن پر ختم ہوتے ہیں۔ اپلوڈ کردہ اشتہار کو بالکل اسی کوڈ سے جانچا جاتا ہے جو ہمارے اندراجات کو جانچتا ہے۔"},
+    "pipeline_extract": {"en": "AI reads the document into structured fields",
+                         "ur": "AI دستاویز کو ساختہ خانوں میں پڑھتا ہے"},
+
+    # ================= V2 P0-8: landing ===================================
+    "home_paths_heading": {"en": "Choose a path", "ur": "اپنا راستہ منتخب کریں"},
+    "path_scholarship": {"en": "Find a scholarship", "ur": "اسکالرشپ تلاش کریں"},
+    "path_job": {"en": "Find a job", "ur": "نوکری تلاش کریں"},
+    "path_skills": {"en": "Learn a skill", "ur": "ہنر سیکھیں"},
+    "path_check_ad": {"en": "Check an advertisement", "ur": "اشتہار کی جانچ کریں"},
+    "correct_heading": {"en": "Correct what was read", "ur": "پڑھی گئی معلومات درست کریں"},
+    "correct_note": {
+        "en": "Reading a photo is not perfect. Fix anything that does not match the original "
+              "document, and the screening below will be re-run against your corrections.",
+        "ur": "تصویر سے پڑھنا ہمیشہ درست نہیں ہوتا۔ جو بات اصل دستاویز سے مطابقت نہ رکھے اسے درست کریں، جانچ دوبارہ کی جائے گی۔"},
+    "correct_apply": {"en": "Apply corrections and re-screen", "ur": "درستگی لاگو کریں اور دوبارہ جانچیں"},
+    "correct_applied": {
+        "en": "Screened against your corrections, not the original reading.",
+        "ur": "یہ جانچ آپ کی درست کردہ معلومات پر کی گئی ہے، اصل پڑھائی پر نہیں۔"},
+    "correct_deadline_hint": {"en": "Format: YYYY-MM-DD", "ur": "شکل: سال-مہینہ-دن"},
+    "correct_none": {"en": "Not stated", "ur": "درج نہیں"},
+    "path_start": {"en": "Start here", "ur": "یہاں سے شروع کریں"},
+    "home_upload_hint": {
+        "en": "Use the 'Read an announcement' tab above.",
+        "ur": "اوپر 'اعلان پڑھیں' والا ٹیب استعمال کریں۔"},
+    "path_check_ad_body": {
+        "en": "Found a poster, screenshot or PDF elsewhere? Have it read and screened.",
+        "ur": "کہیں کوئی اشتہار، اسکرین شاٹ یا PDF ملا؟ اسے پڑھوا کر جانچ لیں۔"},
+    "benefits_heading": {"en": "Why Sahulat", "ur": "سہولت کیوں"},
+    "benefit_personal_title": {"en": "Personalised", "ur": "ذاتی نوعیت کا"},
+    "benefit_personal_body": {"en": "Matched to the profile you enter, not a generic list.",
+                              "ur": "آپ کی دی گئی معلومات کے مطابق، عام فہرست نہیں۔"},
+    "benefit_evidence_title": {"en": "Evidence-based", "ur": "شواہد پر مبنی"},
+    "benefit_evidence_body": {
+        "en": "Eligibility comes from structured rules, with the source shown for every record.",
+        "ur": "اہلیت متعین قواعد سے نکلتی ہے، اور ہر اندراج کا ماخذ دکھایا جاتا ہے۔"},
+    "benefit_bilingual_title": {"en": "Bilingual", "ur": "دو لسانی"},
+    "benefit_bilingual_body": {"en": "English and Urdu across the whole journey.",
+                               "ur": "پورے سفر میں انگریزی اور اردو۔"},
+    "benefit_realworld_title": {"en": "Works with real-world ads", "ur": "اصل اشتہارات پر کام کرتا ہے"},
+    "benefit_realworld_body": {"en": "Upload a poster or PDF you found anywhere else.",
+                               "ur": "کہیں سے بھی ملا اشتہار یا PDF اپلوڈ کریں۔"},
+
+    # ================= P1-1: application readiness ========================
+    "readiness_heading": {"en": "Application readiness", "ur": "درخواست کی تیاری"},
+    "readiness_percent": {"en": "{percent}% ready", "ur": "{percent}% تیار"},
+    "readiness_none": {"en": "Nothing ticked yet", "ur": "ابھی کچھ منتخب نہیں"},
+    "documents_you_have": {"en": "Documents you have", "ur": "آپ کے پاس موجود دستاویزات"},
+    "documents_still_needed": {"en": "Still needed", "ur": "ابھی درکار"},
+    "readiness_note": {
+        "en": "This tracks the checklist you fill in. It does not check that a document "
+              "is valid, current or accepted - only the issuing office can do that.",
+        "ur": "یہ صرف آپ کی بھری ہوئی فہرست دکھاتا ہے۔ یہ نہیں جانچتا کہ دستاویز درست، موجودہ یا قابلِ قبول ہے — یہ صرف متعلقہ دفتر طے کر سکتا ہے۔"},
+    "action_obtain_document": {
+        "en": "Obtain the next document you are missing - {subject}",
+        "ur": "اگلی درکار دستاویز حاصل کریں — {subject}"},
+
+    # ================= P1-2: deadline intelligence ========================
+    "urgency_passed": {"en": "Deadline passed", "ur": "آخری تاریخ گزر چکی"},
+    "urgency_imminent": {"en": "Deadline approaching", "ur": "آخری تاریخ قریب"},
+    "urgency_soon": {"en": "Apply soon", "ur": "جلد درخواست دیں"},
+    "urgency_plenty": {"en": "Plenty of time", "ur": "کافی وقت باقی"},
+    "urgency_unknown": {"en": "No deadline on record", "ur": "آخری تاریخ درج نہیں"},
+    "days_remaining": {"en": "{days} days remaining", "ur": "{days} دن باقی"},
+    "days_remaining_one": {"en": "1 day remaining", "ur": "1 دن باقی"},
+    "days_remaining_today": {"en": "Last day today", "ur": "آج آخری دن"},
+    "days_since_passed": {"en": "Closed {days} days ago", "ur": "{days} دن پہلے بند ہوا"},
+    "urgency_unknown_note": {
+        "en": "We have no application deadline for this record. Check the official source "
+              "before assuming it is still open.",
+        "ur": "اس اندراج کے لیے ہمارے پاس کوئی آخری تاریخ نہیں۔ کھلا ہونے کا اندازہ لگانے سے پہلے سرکاری ذریعہ دیکھیں۔"},
+    "urgency_passed_note": {
+        "en": "Applications are closed. Nothing here is worth preparing until the next cycle opens.",
+        "ur": "درخواستیں بند ہیں۔ اگلا مرحلہ کھلنے تک یہاں کچھ تیار کرنے کی ضرورت نہیں۔"},
+
+    # ================= P1-3: contextual follow-up =========================
+    "ask_about_this": {"en": "Ask about this opportunity", "ur": "اس موقع کے بارے میں پوچھیں"},
+    "ask_scoped_note": {
+        "en": "Answers use only this record's own text as evidence.",
+        "ur": "جوابات صرف اسی اندراج کے متن کو بطور شواہد استعمال کرتے ہیں۔"},
+    "chip_why_eligible": {"en": "Why am I eligible?", "ur": "میں کیوں اہل ہوں؟"},
+    "chip_why_not_eligible": {"en": "Why am I not eligible?", "ur": "میں کیوں اہل نہیں؟"},
+    "chip_what_verify": {"en": "What needs verification?", "ur": "کس چیز کی تصدیق درکار ہے؟"},
+    "chip_this_deadline": {"en": "What is the deadline?", "ur": "آخری تاریخ کیا ہے؟"},
+    "chip_where_apply": {"en": "Where do I apply?", "ur": "درخواست کہاں دوں؟"},
+    "chip_this_documents": {"en": "What documents do I need?", "ur": "کون سی دستاویزات چاہئیں؟"},
+
+    # ================= P1-4: opportunity passport =========================
+    "passport_heading": {"en": "My opportunity passport", "ur": "میرا مواقع پاسپورٹ"},
+    "passport_lede": {
+        "en": "Answer once, reuse everywhere. These details are matched against every "
+              "opportunity you open, including ads you upload.",
+        "ur": "ایک بار جواب دیں، ہر جگہ استعمال کریں۔ یہ تفصیلات ہر موقع پر لاگو ہوتی ہیں، بشمول اپلوڈ کیے گئے اشتہارات۔"},
+    "passport_privacy": {
+        "en": "No CNIC, name, phone number or address is asked for or stored. Your answers "
+              "stay in this browser session and are cleared when you start over.",
+        "ur": "شناختی کارڈ، نام، فون نمبر یا پتہ نہ مانگا جاتا ہے نہ محفوظ کیا جاتا ہے۔ آپ کے جوابات صرف اس سیشن میں رہتے ہیں۔"},
+    "passport_complete": {"en": "{percent}% complete", "ur": "{percent}% مکمل"},
+    "passport_reuse": {"en": "Using your saved answers", "ur": "آپ کے محفوظ جوابات استعمال ہو رہے ہیں"},
+
+    # ================= P1-5: comparison ===================================
+    "compare_heading": {"en": "Compare opportunities", "ur": "مواقع کا موازنہ"},
+    "compare_hint": {"en": "Pick two or more to compare side by side.",
+                     "ur": "موازنے کے لیے دو یا زیادہ منتخب کریں۔"},
+    "compare_factor": {"en": "Factor", "ur": "پہلو"},
+    "compare_eligibility": {"en": "Eligibility", "ur": "اہلیت"},
+    "compare_conditions": {"en": "Conditions met", "ur": "پوری شرائط"},
+    "compare_deadline": {"en": "Deadline", "ur": "آخری تاریخ"},
+    "compare_documents": {"en": "Documents still needed", "ur": "درکار دستاویزات"},
+    "compare_verification": {"en": "Open questions", "ur": "زیرِ التوا سوالات"},
+    "compare_apply": {"en": "Official link", "ur": "سرکاری ربط"},
+    "compare_easiest": {
+        "en": "{name} looks less work to pursue: {reasons}.",
+        "ur": "{name} کے لیے نسبتاً کم محنت درکار ہے: {reasons}۔"},
+    "compare_reason_fewer_blockers": {"en": "fewer unmet conditions", "ur": "کم غیر پوری شرائط"},
+    "compare_reason_fewer_gaps": {"en": "fewer open questions", "ur": "کم زیرِ التوا سوالات"},
+    "compare_reason_fewer_documents": {"en": "fewer documents left to gather",
+                                       "ur": "کم دستاویزات جمع کرنا باقی"},
+    "compare_effort_caveat": {
+        "en": "This compares effort, not value. It says nothing about which award is worth "
+              "more or which you are more likely to receive.",
+        "ur": "یہ محنت کا موازنہ ہے، فائدے کا نہیں۔ یہ نہیں بتاتا کہ کون سا وظیفہ زیادہ بہتر ہے یا ملنے کا امکان زیادہ ہے۔"},
+    "compare_too_close": {
+        "en": "These look about equally involved. Choose on what the award actually offers.",
+        "ur": "دونوں تقریباً برابر محنت طلب ہیں۔ فیصلہ اس بنیاد پر کریں کہ کیا پیشکش ہے۔"},
+
+    # ================= P1-6: freshness ====================================
+    "freshness_heading": {"en": "Information freshness", "ur": "معلومات کی تازگی"},
+    "freshness_recent": {"en": "Recently verified", "ur": "حال ہی میں تصدیق شدہ"},
+    "freshness_aging": {"en": "Verification recommended", "ur": "تصدیق کی سفارش"},
+    "freshness_stale": {"en": "Likely out of date", "ur": "غالباً پرانی"},
+    "freshness_never": {"en": "Never verified by us", "ur": "ہماری طرف سے کبھی تصدیق نہیں"},
+    "freshness_days": {"en": "Checked {days} days ago", "ur": "{days} دن پہلے جانچا گیا"},
+    "freshness_today": {"en": "Checked today", "ur": "آج جانچا گیا"},
+    "freshness_yesterday": {"en": "Checked yesterday", "ur": "کل جانچا گیا"},
+    "freshness_never_note": {
+        "en": "Nobody on our team has confirmed this record against the official source. "
+              "Being in the catalogue is not evidence that it is current.",
+        "ur": "ہماری ٹیم نے اس اندراج کی سرکاری ذریعے سے تصدیق نہیں کی۔ فہرست میں ہونا موجودہ ہونے کا ثبوت نہیں۔"},
+    "freshness_prompt": {
+        "en": "Confirm the details on the official page before you rely on them.",
+        "ur": "ان تفصیلات پر انحصار سے پہلے سرکاری صفحے پر تصدیق کریں۔"},
+
+    # ================= P1-7: explain like I'm new =========================
+    "eli5_heading": {"en": "In plain language", "ur": "آسان زبان میں"},
+    "eli5_button": {"en": "Explain this simply", "ur": "آسان الفاظ میں سمجھائیں"},
+    "eli5_who_is_this_for": {"en": "Who is this for?", "ur": "یہ کس کے لیے ہے؟"},
+    "eli5_what_you_get": {"en": "What do you get?", "ur": "آپ کو کیا ملتا ہے؟"},
+    "eli5_who_can_apply": {"en": "Who can apply?", "ur": "کون درخواست دے سکتا ہے؟"},
+    "eli5_what_you_need": {"en": "What do you need?", "ur": "آپ کو کیا درکار ہے؟"},
+    "eli5_where_to_apply": {"en": "Where do you apply?", "ur": "درخواست کہاں دیں؟"},
+    "eli5_caveat": {
+        "en": "Reworded by AI from this record only. It cannot add or soften a requirement, "
+              "and it does not decide your eligibility - the conditions above do.",
+        "ur": "یہ صرف اسی اندراج سے AI نے آسان الفاظ میں لکھا ہے۔ یہ کوئی شرط بڑھا یا نرم نہیں کر سکتا، اور اہلیت کا فیصلہ نہیں کرتا — وہ اوپر کی شرائط کرتی ہیں۔"},
+
+    # ================= P1-8: source presentation ==========================
+    "source_title_label": {"en": "Source document", "ur": "ماخذ دستاویز"},
+    "source_org_label": {"en": "Organisation", "ur": "ادارہ"},
+    "source_url_label": {"en": "Official page", "ur": "سرکاری صفحہ"},
+    "source_none": {"en": "No official link on record", "ur": "کوئی سرکاری ربط درج نہیں"},
+
+    # ================= P2-4: empty states =================================
+    "empty_try_heading": {"en": "What you can try", "ur": "آپ کیا کر سکتے ہیں"},
+    "empty_try_categories": {"en": "Choose another category",
+                             "ur": "کوئی اور زمرہ منتخب کریں"},
+    "empty_try_answers": {"en": "Change your education level or domicile",
+                          "ur": "اپنی تعلیمی سطح یا ڈومیسائل تبدیل کریں"},
+    "empty_try_upload": {"en": "Upload an advertisement you found elsewhere",
+                         "ur": "کہیں اور سے ملا اشتہار اپلوڈ کریں"},
+    "empty_catalogue_note": {
+        "en": "Our catalogue currently holds {n} verified-source records. A small catalogue "
+              "is a limit of this prototype, not a judgement about you.",
+        "ur": "ہمارے پاس فی الحال {n} اندراجات ہیں۔ فہرست کا مختصر ہونا اس نمونے کی حد ہے، آپ کے بارے میں کوئی فیصلہ نہیں۔"},
+    "documents_none_marked": {
+        "en": "You haven't marked any documents as available yet.",
+        "ur": "آپ نے ابھی کوئی دستاویز دستیاب کے طور پر نشان زد نہیں کی۔"},
+    "documents_none_listed": {
+        "en": "This record does not list the documents required. Check the official page "
+              "before you apply - that is a gap in our record, not a sign that none are needed.",
+        "ur": "اس اندراج میں مطلوبہ دستاویزات درج نہیں۔ درخواست سے پہلے سرکاری صفحہ دیکھیں — یہ ہمارے اندراج کی کمی ہے، اس کا مطلب یہ نہیں کہ کوئی دستاویز درکار نہیں۔"},
+    "answer_empty_hint": {
+        "en": "Pick a question above to get an answer grounded in this record.",
+        "ur": "اوپر سے کوئی سوال منتخب کریں تاکہ اسی اندراج سے جواب مل سکے۔"},
+
+    # ================= P2-5: degraded AI ==================================
+    "ai_unavailable_heading": {"en": "AI explanation is temporarily unavailable",
+                               "ur": "اے آئی تشریح فی الحال دستیاب نہیں"},
+    "ai_unavailable_body": {
+        "en": "Everything else on this page is unaffected: your eligibility result, the "
+              "conditions checked, the official source and your document checklist are all "
+              "produced by rules, not by the AI.",
+        "ur": "اس صفحے پر باقی سب کچھ متاثر نہیں ہوا: آپ کا نتیجہ، جانچی گئی شرائط، سرکاری ماخذ اور دستاویزات کی فہرست — سب قواعد سے بنتے ہیں، AI سے نہیں۔"},
+    "ai_offline_heading": {"en": "Running without an API key", "ur": "بغیر اے پی آئی کلید کے"},
+    "no_evidence_heading": {"en": "We can't answer that from this record",
+                            "ur": "اس اندراج سے اس کا جواب نہیں دیا جا سکتا"},
+    "ai_retry": {"en": "Try again", "ur": "دوبارہ کوشش کریں"},
+
+    # ================= P2-2: impact ======================================
+    "impact_heading": {"en": "Sahulat impact", "ur": "سہولت کا اثر"},
+    "impact_screened": {"en": "opportunities screened", "ur": "مواقع جانچے گئے"},
+    "impact_requirements": {"en": "requirements checked", "ur": "شرائط جانچی گئیں"},
+    "impact_documents": {"en": "documents identified", "ur": "دستاویزات کی نشاندہی"},
+    "impact_minutes": {"en": "minutes of searching, estimated",
+                       "ur": "منٹ کی تلاش، تخمینہ"},
+    "impact_counted_note": {
+        "en": "Counted from this session only. Nothing is carried over between users, "
+              "and nothing here is stored.",
+        "ur": "صرف اسی سیشن سے شمار کیا گیا۔ کچھ بھی صارفین کے درمیان منتقل یا محفوظ نہیں ہوتا۔"},
+    "impact_estimate_note": {
+        "en": "The time figure is the only estimate: {n} opportunities × {minutes} minutes "
+              "assumed per manual lookup. Prototype estimate — not a measured "
+              "population-level claim.",
+        "ur": "وقت کا عدد ہی واحد تخمینہ ہے: {n} مواقع × {minutes} منٹ فی دستی تلاش۔ یہ نمونے کا تخمینہ ہے، کوئی ماپا گیا دعویٰ نہیں۔"},
+    "impact_estimate_badge": {"en": "Estimate", "ur": "تخمینہ"},
+
+    # ================= P2-3: result detail tabs ===========================
+    "tab_eligibility": {"en": "Eligibility", "ur": "اہلیت"},
+    "tab_documents": {"en": "Documents & steps", "ur": "دستاویزات اور مراحل"},
+    "tab_source": {"en": "Source", "ur": "ماخذ"},
+    "tab_ask": {"en": "Understand & ask", "ur": "سمجھیں اور پوچھیں"},
+
+    # ================= provisional deadlines (DATA-02) ====================
+    "deadline_provisional_badge": {"en": "Provisional date", "ur": "عارضی تاریخ"},
+    "deadline_provisional_note": {
+        "en": "This date is our placeholder for the expected cycle, not a date the authority "
+              "has announced. Treat the countdown as indicative and confirm on the official page.",
+        "ur": "یہ تاریخ متوقع مرحلے کے لیے ہماری عارضی تاریخ ہے، ادارے کی اعلان کردہ نہیں۔ گنتی کو اندازہ سمجھیں اور سرکاری صفحے پر تصدیق کریں۔"},
 
     # -- follow-up chat -----------------------------------------------------
     "ask_followup": {"en": "Ask a follow-up question", "ur": "مزید سوال پوچھیں"},
@@ -645,11 +997,19 @@ def t(key: str, lang: str = "en", **kwargs: Any) -> str:
     Look up a string. Unknown keys return the key itself (so a missing string
     is visible in testing rather than silently blank). Any **kwargs are used
     as format placeholders.
+
+    Roman Urdu (P2-1) lives in its own table rather than as a third key in
+    every literal: it keeps the English/Urdu pairs - the two languages the
+    product promises - readable and reviewable side by side, and a gap in the
+    Roman table degrades to English rather than breaking a page.
     """
     entry = STRINGS.get(key)
     if not entry:
         return key
-    text = entry.get(lang) or entry.get("en") or key
+    if lang == LANG_ROMAN:
+        text = ROMAN.get(key) or entry.get("en") or key
+    else:
+        text = entry.get(lang) or entry.get("en") or key
     if kwargs:
         try:
             return text.format(**kwargs)
@@ -813,7 +1173,9 @@ def _years(value: Any, lang: str) -> str:
         n = f"{f:g}"
     except (TypeError, ValueError):
         n = str(value)
-    return f"{n} " + ("سال" if lang == "ur" else "yrs")
+    if lang == LANG_UR:
+        return f"{n} سال"
+    return f"{n} " + ("saal" if lang == LANG_ROMAN else "yrs")
 
 
 # ---------------------------------------------------------------------------
@@ -834,36 +1196,50 @@ _CHECK_LABEL_KEYS = {
 }
 
 _CHECK_TITLES = {
-    CHECK_AGE: {"en": "Age", "ur": "عمر"},
-    CHECK_DOMICILE: {"en": "Domicile", "ur": "ڈومیسائل"},
-    CHECK_EDUCATION: {"en": "Education level", "ur": "تعلیمی سطح"},
-    CHECK_MARKS: {"en": "Academic marks", "ur": "تعلیمی نمبر"},
-    CHECK_INCOME: {"en": "Household income", "ur": "گھریلو آمدنی"},
-    CHECK_ENROLLMENT: {"en": "Current enrollment", "ur": "موجودہ داخلہ"},
-    CHECK_EXISTING_SCHOLARSHIP: {"en": "Scholarship exclusivity", "ur": "اسکالرشپ کی شرط"},
-    CHECK_EMPLOYMENT: {"en": "Employment status", "ur": "ملازمت کی صورتحال"},
-    CHECK_EXPERIENCE: {"en": "Work experience", "ur": "کام کا تجربہ"},
-    CHECK_DEADLINE: {"en": "Application deadline", "ur": "درخواست کی آخری تاریخ"},
-    CHECK_GENDER: {"en": "Gender requirement", "ur": "جنس کی شرط"},
-    CHECK_ENGLISH: {"en": "English proficiency", "ur": "انگریزی کی استعداد"},
-    CHECK_COMPUTER: {"en": "Computer skills", "ur": "کمپیوٹر مہارت"},
-    CHECK_FIELD_OF_STUDY: {"en": "Field of study", "ur": "شعبہ تعلیم"},
+    CHECK_AGE: {"en": "Age", "ur": "عمر",
+                   "ur_roman": "Umar"},
+    CHECK_DOMICILE: {"en": "Domicile", "ur": "ڈومیسائل",
+                   "ur_roman": "Domicile"},
+    CHECK_EDUCATION: {"en": "Education level", "ur": "تعلیمی سطح",
+                   "ur_roman": "Taleemi darja"},
+    CHECK_MARKS: {"en": "Academic marks", "ur": "تعلیمی نمبر",
+                   "ur_roman": "Taleemi number"},
+    CHECK_INCOME: {"en": "Household income", "ur": "گھریلو آمدنی",
+                   "ur_roman": "Ghar ki aamdani"},
+    CHECK_ENROLLMENT: {"en": "Current enrollment", "ur": "موجودہ داخلہ",
+                   "ur_roman": "Maujooda enrollment"},
+    CHECK_EXISTING_SCHOLARSHIP: {"en": "Scholarship exclusivity", "ur": "اسکالرشپ کی شرط",
+                   "ur_roman": "Scholarship ki shart"},
+    CHECK_EMPLOYMENT: {"en": "Employment status", "ur": "ملازمت کی صورتحال",
+                   "ur_roman": "Mulazmat ki soorat-e-haal"},
+    CHECK_EXPERIENCE: {"en": "Work experience", "ur": "کام کا تجربہ",
+                   "ur_roman": "Kaam ka tajurba"},
+    CHECK_DEADLINE: {"en": "Application deadline", "ur": "درخواست کی آخری تاریخ",
+                   "ur_roman": "Aakhri tareekh"},
+    CHECK_GENDER: {"en": "Gender requirement", "ur": "جنس کی شرط",
+                   "ur_roman": "Jins ki shart"},
+    CHECK_ENGLISH: {"en": "English proficiency", "ur": "انگریزی کی استعداد",
+                   "ur_roman": "English ki mahaarat"},
+    CHECK_COMPUTER: {"en": "Computer skills", "ur": "کمپیوٹر مہارت",
+                   "ur_roman": "Computer hunar"},
+    CHECK_FIELD_OF_STUDY: {"en": "Field of study", "ur": "شعبہ تعلیم",
+                   "ur_roman": "Taleemi shoba"},
 }
 
-_REQUIRED_WORD = {"en": "Required", "ur": "درکار"}
-_YOU_WORD = {"en": "You", "ur": "آپ"}
-_NOT_PROVIDED = {"en": "not provided", "ur": "فراہم نہیں کیا گیا"}
-_AT_LEAST = {"en": "at least", "ur": "کم از کم"}
-_AT_MOST = {"en": "at most", "ur": "زیادہ سے زیادہ"}
-_BETWEEN = {"en": "between", "ur": "کے درمیان"}
-_AND = {"en": "and", "ur": "اور"}
-_OPEN_UNTIL = {"en": "Open until", "ur": "کھلا ہے"}
-_CLOSED_ON = {"en": "Closed on", "ur": "بند ہوا"}
-_UNREADABLE_DATE = {"en": "Deadline not in YYYY-MM-DD format", "ur": "آخری تاریخ درست شکل میں نہیں"}
-_MUST_BE_ENROLLED = {"en": "must be enrolled", "ur": "داخلہ ضروری ہے"}
-_MUST_NOT_BE_ENROLLED = {"en": "must not be enrolled", "ur": "داخلہ نہیں ہونا چاہیے"}
-_NO_OTHER_SCHOLARSHIP = {"en": "must not hold another scholarship", "ur": "کوئی اور اسکالرشپ نہیں ہونی چاہیے"}
-_NO_RESTRICTION = {"en": "no restriction", "ur": "کوئی پابندی نہیں"}
+_REQUIRED_WORD = {"en": "Required", "ur": "درکار", "ur_roman": "Zaroori"}
+_YOU_WORD = {"en": "You", "ur": "آپ", "ur_roman": "Aap"}
+_NOT_PROVIDED = {"en": "not provided", "ur": "فراہم نہیں کیا گیا", "ur_roman": "nahi diya gaya"}
+_AT_LEAST = {"en": "at least", "ur": "کم از کم", "ur_roman": "kam az kam"}
+_AT_MOST = {"en": "at most", "ur": "زیادہ سے زیادہ", "ur_roman": "zyada se zyada"}
+_BETWEEN = {"en": "between", "ur": "کے درمیان", "ur_roman": "darmiyan"}
+_AND = {"en": "and", "ur": "اور", "ur_roman": "aur"}
+_OPEN_UNTIL = {"en": "Open until", "ur": "کھلا ہے", "ur_roman": "Khula hai"}
+_CLOSED_ON = {"en": "Closed on", "ur": "بند ہوا", "ur_roman": "Band hua"}
+_UNREADABLE_DATE = {"en": "Deadline not in YYYY-MM-DD format", "ur": "آخری تاریخ درست شکل میں نہیں", "ur_roman": "Aakhri tareekh SAAL-MAHINA-DIN ki shakal mein nahi"}
+_MUST_BE_ENROLLED = {"en": "must be enrolled", "ur": "داخلہ ضروری ہے", "ur_roman": "zaroori hai ke enrolled hon"}
+_MUST_NOT_BE_ENROLLED = {"en": "must not be enrolled", "ur": "داخلہ نہیں ہونا چاہیے", "ur_roman": "enrolled nahi hona chahiye"}
+_NO_OTHER_SCHOLARSHIP = {"en": "must not hold another scholarship", "ur": "کوئی اور اسکالرشپ نہیں ہونی چاہیے", "ur_roman": "koi aur scholarship nahi honi chahiye"}
+_NO_RESTRICTION = {"en": "no restriction", "ur": "کوئی پابندی نہیں", "ur_roman": "koi pabandi nahi"}
 
 
 def _w(table: Dict[str, str], lang: str) -> str:
@@ -988,6 +1364,148 @@ def describe_check(check: ConditionCheck, lang: str = "en") -> Tuple[str, str]:
 
     return title, f"{_w(_REQUIRED_WORD, lang)}: {required} · " \
                   f"{_w(_YOU_WORD, lang)}: {_actual_text(check, lang)}"
+
+
+_RESULT_LABELS = {
+    MET: "result_passed",
+    UNMET: "result_failed",
+    UNKNOWN: "result_verify",
+}
+
+
+def scorecard_row(check: ConditionCheck, lang: str = "en"):
+    """
+    One scorecard line (V2 P0-1): (requirement, your information, result).
+
+    Same source of truth as describe_check() - a condition must never read one
+    way in the scorecard and another way in the explanation.
+    """
+    return (check_title(check, lang),
+            _requirement_text(check, lang),
+            _actual_text(check, lang),
+            t(_RESULT_LABELS.get(check.status, "result_verify"), lang))
+
+
+def describe_gap(check: ConditionCheck, lang: str = "en") -> str:
+    """
+    What stands between the profile and this condition (V2 P0-2).
+
+    States the requirement and the profile's own value side by side, and
+    nothing else. It never says what *would* happen if the value changed:
+    that is a claim about a future decision this system does not make.
+    """
+    required = _requirement_text(check, lang)
+    if check.status == UNKNOWN or check.actual is None:
+        return t("gap_unknown_line", lang, required=required)
+    return t("gap_line", lang, required=required, actual=_actual_text(check, lang))
+
+
+def describe_next_action(action, lang: str = "en") -> str:
+    """
+    Render a NextAction (V2 P0-6). The decision of *which* action belongs to
+    core/next_action.py; this only puts it into words.
+    """
+    key = action.key
+    if key == "review_blocker" or key == "confirm_condition":
+        stub = ConditionCheck(key=action.subject.get("check", ""), status=UNKNOWN)
+        return t(f"action_{key}", lang, subject=check_title(stub, lang).lower())
+    if key == "answer_missing":
+        fields = action.subject.get("fields", [])
+        if len(fields) == 1:
+            return t("action_answer_missing_one", lang,
+                     subject=profile_field_label(fields[0], lang))
+        return t("action_answer_missing_many", lang, count=len(fields))
+    if key == "prepare_documents":
+        return t("action_prepare_documents", lang, subject=action.subject.get("count", ""))
+    if key == "obtain_document":
+        return t("action_obtain_document", lang, subject=action.subject.get("document", ""))
+    return t(f"action_{key}", lang)
+
+
+def describe_ranking_reason(factors: dict, lang: str = "en") -> str:
+    """
+    Why this result ranks where it does (V2 P0-3), from structured facts only.
+
+    Kept to at most three clauses: a reason nobody reads is not a reason.
+    """
+    parts = []
+    total, met = factors.get("total", 0), factors.get("met", 0)
+    if total and met == total:
+        parts.append(t("rank_reason_all_met", lang, total=total))
+    elif total:
+        parts.append(t("rank_reason_met", lang, met=met, total=total))
+
+    groups = factors.get("priority_groups") or []
+    if groups:
+        names = join_list([priority_group_label(g, lang) for g in groups], lang)
+        parts.append(t("rank_reason_priority", lang, groups=names))
+
+    days = factors.get("days_until_deadline")
+    if days is not None and days >= 0:
+        parts.append(t("rank_reason_deadline", lang, days=days))
+    elif factors.get("unknown"):
+        parts.append(t("rank_reason_verify", lang, unknown=factors["unknown"]))
+
+    separator = " · "
+    return separator.join(parts[:3])
+
+
+def describe_urgency(urgency: str, days=None, lang: str = "en"):
+    """
+    Deadline state as (label, detail) (P1-2).
+
+    "No deadline on record" is returned as its own label, never folded into
+    "plenty of time": most curated records carry no deadline, so that is the
+    state users meet most often, and it is the one where reassurance would do
+    the most harm.
+    """
+    label = t(f"urgency_{urgency}", lang)
+    if days is None:
+        return label, t("urgency_unknown_note", lang) if urgency == "unknown" else ""
+    if days < 0:
+        return label, t("days_since_passed", lang, days=abs(days))
+    if days == 0:
+        return label, t("days_remaining_today", lang)
+    if days == 1:
+        return label, t("days_remaining_one", lang)
+    return label, t("days_remaining", lang, days=days)
+
+
+def describe_freshness(state: str, days=None, lang: str = "en"):
+    """Record freshness as (label, detail) (P1-6)."""
+    label = t(f"freshness_{state}", lang)
+    if state == "never":
+        return label, t("freshness_never_note", lang)
+    if days is None:
+        return label, ""
+    # "Checked 0 days ago" is how a template reads when nobody checked the
+    # boundary case. A record verified today is the most common state in a
+    # freshly curated catalogue, so it is the one worth phrasing properly.
+    if days <= 0:
+        return label, t("freshness_today", lang)
+    if days == 1:
+        return label, t("freshness_yesterday", lang)
+    return label, t("freshness_days", lang, days=days)
+
+
+def describe_comparison(comparison, lang: str = "en") -> str:
+    """
+    The one-line summary under a comparison (P1-5).
+
+    Returns the "too close to call" line when no option is meaningfully
+    easier. Naming a winner where the numbers do not support one would turn a
+    comparison into a recommendation.
+    """
+    if not comparison.easiest_id:
+        return t("compare_too_close", lang)
+    row = next((r for r in comparison.rows
+                if r.opportunity_id == comparison.easiest_id), None)
+    if row is None:
+        return t("compare_too_close", lang)
+    reasons = [t(f"compare_reason_{reason['key']}", lang) for reason in comparison.reasons]
+    if not reasons:
+        return t("compare_too_close", lang)
+    return t("compare_easiest", lang, name=row.name, reasons=join_list(reasons, lang))
 
 
 def describe_requirements(conditions, lang: str = "en"):

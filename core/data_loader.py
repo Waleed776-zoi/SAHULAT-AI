@@ -4,10 +4,10 @@ Opportunity objects. Skips schema.json (documentation only) and any file
 starting with an underscore.
 
 Placeholder entries (name still starting with "REPLACE ME") are skipped so an
-uncurated record can never silently appear in a live demo - which is also why
-the Jobs category currently loads zero records. The UI reads the category
-counts below and labels an empty category honestly instead of showing an
-unexplained blank result set (DATA-03).
+uncurated record can never silently appear in a live demo. A category that
+ends up with no records is still reported with a count of zero: the UI reads
+the category counts below and labels an empty category honestly instead of
+showing an unexplained blank result set (DATA-03).
 """
 from __future__ import annotations
 
@@ -54,9 +54,21 @@ def load_all_opportunities() -> List[Opportunity]:
             log.error("Skipping unreadable opportunity file %s: %s", path.name, exc)
             continue
 
-        # njp_jobs_sample.json wraps multiple jobs under a "jobs" key;
-        # every other file is a single opportunity record.
-        records = payload["jobs"] if isinstance(payload.get("jobs"), list) else [payload]
+        # A file may hold one record, a list of records, or a list wrapped
+        # under a "jobs" / "records" key. Supporting the bare
+        # list matters: several records concatenated into one file is the
+        # natural way to paste curated data in, and before this the whole
+        # file failed to parse and was skipped with only a log line - eight
+        # records vanished from the catalogue without anything on screen
+        # saying so.
+        if isinstance(payload, list):
+            records = payload
+        elif isinstance(payload.get("jobs"), list):
+            records = payload["jobs"]
+        elif isinstance(payload.get("records"), list):
+            records = payload["records"]
+        else:
+            records = [payload]
 
         for record in records:
             if not isinstance(record, dict) or _is_placeholder_record(record):

@@ -13,6 +13,9 @@ from unittest import mock
 
 from streamlit.testing.v1 import AppTest
 
+from core.data_loader import category_counts, load_all_opportunities
+from core.i18n import t
+
 APP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app.py")
 
 
@@ -64,10 +67,25 @@ class TestDocumentChecklistStaysInSync(unittest.TestCase):
         self.total = len(self.keys)
 
     def shown(self):
-        for caption in self.app.caption:
-            match = re.match(r"^(\d+) of (\d+) ready$", str(caption.value).strip())
+        """
+        The count as the page states it.
+
+        P1-1 moved this into the readiness header; the behaviour under test is
+        unchanged, so the assertion is not relaxed - it just reads the number
+        from where the number now lives. Also picks up the readiness percent so
+        a test can check the two never disagree.
+        """
+        for block in self.app.markdown:
+            match = re.search(r'sa-ready-count">(\d+) of (\d+) ready<', str(block.value))
             if match:
                 return int(match.group(1)), int(match.group(2))
+        return None
+
+    def shown_percent(self):
+        for block in self.app.markdown:
+            match = re.search(r'sa-ready-num">(\d+)% ready<', str(block.value))
+            if match:
+                return int(match.group(1))
         return None
 
     def actual(self):
@@ -96,6 +114,51 @@ class TestDocumentChecklistStaysInSync(unittest.TestCase):
         for index, key in enumerate(self.keys, 1):
             self.app.checkbox(key=key).uncheck().run()
             self.assert_in_sync(f"after unticking {index}")
+
+
+class TestReadinessPercent(unittest.TestCase):
+    """
+    P1-1: the readiness figure is a count of the checklist, so it must track
+    the boxes exactly - including never reading 100% while something is left.
+    """
+
+    def setUp(self):
+        self.app = at_results()
+        keys = [c.key for c in self.app.checkbox
+                if c.key and c.key.startswith("doc_")]
+        prefix = keys[0].rsplit("_", 1)[0]
+        self.keys = [k for k in keys if k.startswith(prefix)]
+
+    def percent(self):
+        for block in self.app.markdown:
+            match = re.search(r'sa-ready-num">(\d+)% ready<', str(block.value))
+            if match:
+                return int(match.group(1))
+        return None
+
+    def test_starts_at_zero(self):
+        self.assertEqual(self.percent(), 0)
+
+    def test_never_reads_full_while_something_is_missing(self):
+        for key in self.keys[:-1]:
+            self.app.checkbox(key=key).check().run()
+        self.assertLess(self.percent(), 100)
+
+    def test_reads_full_only_when_everything_is_ticked(self):
+        for key in self.keys:
+            self.app.checkbox(key=key).check().run()
+        self.assertEqual(self.percent(), 100)
+
+    def test_next_step_follows_the_checklist(self):
+        """
+        P1-1 connects the checklist to the next action: once some documents
+        are gathered, "prepare your documents" is no longer the useful step.
+        """
+        body = " ".join(str(m.value) for m in self.app.markdown)
+        self.assertIn("Prepare the", body)
+        self.app.checkbox(key=self.keys[0]).check().run()
+        body = " ".join(str(m.value) for m in self.app.markdown)
+        self.assertIn("Obtain the next document", body)
 
 
 class TestMotionDoesNotReplay(unittest.TestCase):
@@ -316,6 +379,160 @@ class TestExtractionIsReadable(unittest.TestCase):
     def test_raw_json_is_behind_a_disclosure(self):
         labels = [e.label for e in self.app.expander]
         self.assertIn("Show exactly what the model returned", labels)
+
+
+class TestV2ResultsPage(unittest.TestCase):
+    """V2 P0-1/2/3/6 reaching the actual page, not just the core modules."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = at_results()
+        cls.body = " ".join(str(m.value) for m in cls.app.markdown)
+
+    def test_page_renders(self):
+        self.assertFalse(self.app.exception)
+
+    def test_top_matches_shortlist_is_shown(self):
+        self.assertIn("sa-top-name", self.body)
+        self.assertIn("sa-top-reason", self.body)
+
+    def test_scorecard_table_is_shown(self):
+        self.assertIn("sa-scorecard", self.body)
+        for column in ("Requirement", "Your information", "Result"):
+            self.assertIn(column, self.body)
+
+    def test_scorecard_rows_carry_a_result_pill(self):
+        pills = re.findall(r'sa-pill (pill-[a-z]+)">([^<]+)<', self.body)
+        self.assertTrue(pills)
+        self.assertTrue(any(label == "Passed" for _, label in pills))
+
+    def test_header_count_matches_the_rows_of_the_first_card(self):
+        """
+        The summary is a count of the rows below it. Rendering them from
+        different places is how they would drift apart.
+        """
+        shown = re.search(r'sa-score-num">(\d+) of (\d+) stated conditions met', self.body)
+        self.assertIsNotNone(shown)
+        # Match the markup, not the stylesheet: the injected CSS contains
+        # every one of these class names too.
+        block = self.body[self.body.index('<div class="sa-scorecard">'):]
+        first_table = block[:block.index("</table>")]
+        passed = first_table.count('sa-pill pill-good')
+        self.assertEqual(int(shown.group(1)), passed)
+
+    def test_no_percentage_match_score_is_claimed(self):
+        self.assertNotIn("% match", self.body)
+        self.assertNotIn("match score", self.body.lower())
+
+    def test_every_result_offers_a_next_step(self):
+        cards = self.body.count('class="sa-result-title"')
+        self.assertGreater(cards, 0)
+        self.assertEqual(self.body.count('class="sa-next-label"'), cards)
+
+    def test_architecture_statement_is_present(self):
+        self.assertIn("AI does not decide your eligibility", self.body)
+
+
+class TestCorrectingAMisreadExtraction(unittest.TestCase):
+    """
+    V2 P0-4: reading a photograph is unreliable, and whatever comes out of it
+    is treated as fact by the rules engine. The correction path is what stops
+    a misread number from silently becoming an eligibility verdict.
+    """
+
+    def setUp(self):
+        from core.ad_reader import build_record
+        # The poster says 60%. The model read 90%.
+        self.record, raw = build_record({
+            "name": "Test scholarship",
+            "category": "scholarship",
+            "eligibility_conditions": {"min_marks_percentage": 90,
+                                       "min_age": 18, "max_age": 30},
+            "extraction_confidence": "medium",
+        })
+        self.app = AppTest.from_file(APP, default_timeout=240)
+        self.app.session_state["uploaded_opportunity"] = self.record
+        self.app.session_state["uploaded_raw"] = raw
+        self.app.session_state["answers"] = {
+            "age": 21, "domicile_province": "Punjab",
+            "education_level": "intermediate", "marks_percentage": 72.0}
+        self.app.session_state["screen_upload"] = True
+        self.app.run()
+
+    def test_correction_changes_the_verdict(self):
+        self.assertEqual(self.app.session_state["upload_match"].overall_status,
+                         "not_eligible")
+        self.app.number_input(key="fix_marks").set_value(60.0).run()
+        self.app.button(key="apply_fixes").click().run()
+        self.assertFalse(self.app.exception)
+        self.assertEqual(self.app.session_state["upload_match"].overall_status,
+                         "eligible")
+
+    def test_correction_does_not_upgrade_trust(self):
+        """
+        A user fixing a typo has not verified the opportunity against the
+        issuing authority. The record stays user_uploaded (Invariant 4).
+        """
+        self.app.number_input(key="fix_marks").set_value(60.0).run()
+        self.app.button(key="apply_fixes").click().run()
+        self.assertEqual(self.record.source_type, "user_uploaded")
+        self.assertFalse(self.record.is_verified())
+
+    def test_the_page_says_it_used_the_corrections(self):
+        self.app.number_input(key="fix_marks").set_value(60.0).run()
+        self.app.button(key="apply_fixes").click().run()
+        body = " ".join(str(m.value) for m in self.app.markdown)
+        self.assertIn("Screened against your corrections", body)
+
+
+class TestV2Landing(unittest.TestCase):
+    """V2 P0-8."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = launch()
+        cls.body = " ".join(str(m.value) for m in cls.app.markdown)
+
+    def test_four_paths_including_the_lens(self):
+        for label in ("Find a scholarship", "Find a job", "Learn a skill",
+                      "Check an advertisement"):
+            self.assertIn(label, self.body)
+
+    def test_path_availability_follows_the_catalogue(self):
+        """
+        A path leads somewhere exactly when its category has records.
+
+        This used to assert that the Jobs path was disabled, which was really
+        an assertion about the data of the day rather than about the rule - it
+        broke the moment the Jobs catalogue was curated. The rule is the
+        relationship between the count and the button, so that is what is
+        tested, and it holds whichever categories happen to be filled.
+        """
+        counts = category_counts(load_all_opportunities())
+        for category in ("scholarship", "job", "skills"):
+            button = [b for b in self.app.button if b.key == f"path_{category}"]
+            self.assertTrue(button, f"no landing path rendered for {category}")
+            self.assertEqual(
+                button[0].disabled, counts[category] == 0,
+                f"{category} has {counts[category]} records but disabled="
+                f"{button[0].disabled}",
+            )
+
+    def test_empty_category_is_labelled_not_hidden(self):
+        """
+        DATA-03: a category with nothing in it is shown saying so, rather than
+        quietly dropped - the catalogue being thin is a fact about the data,
+        not a feature to hide. Public assistance is still empty, so it is the
+        category that proves the behaviour.
+        """
+        counts = category_counts(load_all_opportunities())
+        self.assertEqual(counts["assistance"], 0,
+                         "update this test once assistance records exist")
+        self.assertIn(t("category_assistance", "en"), self.body)
+        self.assertIn(t("coming_soon", "en"), self.body)
+
+    def test_benefits_row_is_present(self):
+        self.assertIn("sa-benefit", self.body)
 
 
 if __name__ == "__main__":

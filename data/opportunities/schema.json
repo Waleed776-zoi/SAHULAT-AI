@@ -21,6 +21,7 @@
     "employment_status_required": "one of: unemployed | employed | any | null",
     "special_quota_note": "string or null, e.g. exemptions for orphans / BPS 1-4 govt employees' children",
     "min_experience_years": "number or null, used for job/category=job entries only",
+    "deadline_is_provisional": "true when application_deadline is a placeholder for an expected cycle rather than an announced date. The UI labels it as provisional.",
     "application_deadline": "YYYY-MM-DD or null, used for job/category=job entries only (jobs go stale - always check this)",
     "gender_required": "one of: female | male | any | null (null = no gender restriction). Use only when the programme genuinely reserves places by gender.",
     "min_english_level": "one of: none | basic | intermediate | fluent | null",

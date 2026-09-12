@@ -60,9 +60,20 @@
    NEVER use a broad [class*="st-"] selector: it also matches Streamlit's
    Material icon spans, which render their glyph FROM the ligature text — so
    overriding the font shows the raw name ("keyboard_double_arrow_right"). */
-html, body, .stApp { font-family: var(--sa-font-body); }
+html, body, .stApp {
+  font-family: var(--sa-font-body);
+  /* Urdu in Naskh needs materially more leading than Latin at the same size:
+     the script stacks marks above and below the baseline, so Latin leading
+     makes consecutive lines collide. Set per language in inject_css. */
+  line-height: var(--sa-body-lh, 1.6);
+}
 input, select, textarea, button, .stMarkdown, .stMarkdown p, label,
 .stSelectbox, .stNumberInput, .stTextInput { font-family: var(--sa-font-body); }
+.stMarkdown p, .stMarkdown li { line-height: var(--sa-body-lh, 1.6); }
+
+/* A spacer with a name, so vertical rhythm is not set by inline styles. */
+.sa-spacer { height: var(--s4); }
+.sa-spacer-lg { height: var(--s6); }
 
 /* Belt and braces: our font must never win over an icon font. */
 [data-testid="stIconMaterial"], span[class*="material-symbols"],

@@ -33,20 +33,38 @@ from core.data_loader import (
     KNOWN_CATEGORIES, catalogue_health, category_counts, load_all_opportunities,
 )
 from core.i18n import (
-    computer_label, describe_check, describe_profile, describe_requirements,
+    computer_label, describe_check, describe_comparison, describe_freshness,
+    describe_gap, describe_next_action, describe_profile,
+    describe_ranking_reason, describe_requirements, describe_urgency,
     education_label,
     english_label, field_of_study_label, gender_label, join_list,
-    priority_group_label, profile_field_label, status_label, t,
+    LANGUAGE_NAMES, LANGUAGES, is_rtl, priority_group_label,
+    profile_field_label, scorecard_row, status_label, t,
     validation_message,
 )
-from core.llm_client import answer_followup, explain_match, is_ai_available
+from core.llm_client import (
+    REASON_NO_EVIDENCE, REASON_OFFLINE, SIMPLIFY_SECTIONS, answer_followup,
+    explain_match, is_ai_available, simplify_opportunity,
+)
 from core.models import (
     COMPUTER_LEVELS, EDUCATION_LEVELS, ENGLISH_LEVELS, FIELDS_OF_STUDY, GENDERS,
     LISTING_CLOSED, LISTING_OPEN, MET, PROVINCES, STATUS_ELIGIBLE,
     STATUS_NEEDS_VERIFICATION, STATUS_NOT_ELIGIBLE, UNKNOWN, UNMET, UserProfile,
     sample_profile,
 )
-from core.rules_engine import evaluate, evaluate_all, summarize_counts
+from core.comparison import compare
+from core.impact import estimate_basis, measure
+from core.next_action import (
+    ACTION_ANSWER_MISSING, is_actionable_now, next_action,
+)
+from core.readiness import readiness
+from core.timeliness import (
+    URGENCY_PASSED, URGENCY_UNKNOWN, days_remaining, days_since_verified,
+    deadline_urgency, record_freshness, should_prompt_verification,
+)
+from core.rules_engine import (
+    evaluate, evaluate_all, ranking_factors, summarize_counts, top_matches,
+)
 from core.validation import (
     AGE_MAX, AGE_MIN, EXPERIENCE_MAX, INCOME_MAX, MARKS_MAX, MARKS_MIN,
     RESULTS_STEP_INDEX, STEPS, completion_percent, validate_step,
@@ -126,12 +144,16 @@ def inject_css(lang: str) -> None:
     static styling lives in styles/*.css (spec 17.1) so it is readable and
     reviewable instead of buried in a Python f-string.
     """
-    urdu = lang == "ur"
+    # Roman Urdu is Urdu *language* in Latin *script*: it takes the Latin font
+    # stack, Latin leading and left-to-right layout. Treating it as "the Urdu
+    # one" and mirroring the page would be the obvious, wrong, shortcut.
+    urdu = is_rtl(lang)
     body_font = ("'Noto Naskh Arabic','Inter',system-ui,sans-serif" if urdu
                  else "'Inter',system-ui,-apple-system,sans-serif")
     display_font = ("'Noto Nastaliq Urdu','Noto Naskh Arabic',serif" if urdu
                     else "'Source Serif 4',Georgia,serif")
     display_lh = "2.0" if urdu else "1.12"
+    body_lh = "1.95" if urdu else "1.6"
 
     rtl = """
       .stMain .block-container { direction: rtl; text-align: right; }
@@ -146,7 +168,8 @@ def inject_css(lang: str) -> None:
         f"<style>{FONT_IMPORT}\n"
         f":root {{ --sa-font-body: {body_font};"
         f" --sa-font-display: {display_font};"
-        f" --sa-display-lh: {display_lh}; }}\n"
+        f" --sa-display-lh: {display_lh};"
+        f" --sa-body-lh: {body_lh}; }}\n"
         f"{load_stylesheets()}\n{rtl}</style>",
         unsafe_allow_html=True,
     )
@@ -345,8 +368,10 @@ def init_state() -> None:
         "uploaded_opportunity": None,
         "uploaded_raw": None,
         "upload_match": None,
+        "upload_corrected": False,
         "screen_upload": False,
         "explanations": {},
+        "simplified": {},
         "documents_ready": {},
     }
     for key, value in defaults.items():
@@ -387,6 +412,11 @@ def start_over() -> None:
     st.session_state.step_errors = {}
     st.session_state.view = "home"
     st.session_state.documents_ready = {}
+    st.session_state.simplified = {}
+    # Per-opportunity Q&A answers are keyed dynamically (P1-3), so clear them
+    # by prefix rather than by name.
+    for key in [k for k in st.session_state if str(k).startswith("ctx_answer_")]:
+        del st.session_state[key]
     # Starting over is a fresh journey, so let the reveals play again. Without
     # this, re-running the same profile would land on a static page.
     st.session_state.animated_tokens = set()
@@ -434,17 +464,19 @@ def render_header() -> None:
 
 render_header()
 
-_, lang_en_col, lang_ur_col, cta_col = st.columns([4, 1, 1, 2])
-with lang_en_col:
-    if st.button("EN", key="lang_en", use_container_width=True,
-                 type="primary" if lang == "en" else "secondary"):
-        st.session_state.language = "en"
-        st.rerun()
-with lang_ur_col:
-    if st.button("اردو", key="lang_ur", use_container_width=True,
-                 type="primary" if lang == "ur" else "secondary"):
-        st.session_state.language = "ur"
-        st.rerun()
+# Three language modes (P2-1). Each button is labelled in its own mode, so a
+# reader who cannot read the other two can still find theirs.
+LANGUAGE_BUTTONS = {"en": "EN", "ur": "اردو", "ur_roman": "Roman"}
+
+_, lang_col_a, lang_col_b, lang_col_c, cta_col = st.columns([3, 1, 1, 1, 2])
+for column, code in zip((lang_col_a, lang_col_b, lang_col_c), LANGUAGES):
+    with column:
+        if st.button(LANGUAGE_BUTTONS[code], key=f"lang_{code}",
+                     use_container_width=True,
+                     help=LANGUAGE_NAMES[code],
+                     type="primary" if lang == code else "secondary"):
+            st.session_state.language = code
+            st.rerun()
 with cta_col:
     if st.session_state.view == "home":
         if st.button(t("cta_start", lang), key="header_cta",
@@ -517,6 +549,31 @@ def render_home() -> None:
     with hero_visual:
         st.markdown(opportunity_map_svg(lang), unsafe_allow_html=True)
 
+    # -- four clear paths, including the upload route (V2 P0-8) ------------
+    # The fourth path is not a category: it is the Lens. Leaving it out of the
+    # landing page hid the feature most likely to be the demo moment.
+    section_label(t("home_paths_heading", lang))
+    path_cols = st.columns(4)
+    paths = (("scholarship", "path_scholarship"), ("job", "path_job"),
+             ("skills", "path_skills"))
+    for column, (category, label_key) in zip(path_cols, paths):
+        with column:
+            with st.container(border=True):
+                st.markdown(f"**{t(label_key, lang)}**")
+                st.caption(t(f"find_{category}", lang))
+                available = counts.get(category, 0)
+                if st.button(t("path_start", lang), key=f"path_{category}",
+                             use_container_width=True, disabled=not available):
+                    st.session_state.categories = [category]
+                    go_to(1)          # focus step is already answered for them
+                if not available:
+                    st.caption(t("coming_soon", lang))
+    with path_cols[3]:
+        with st.container(border=True):
+            st.markdown(f"**{t('path_check_ad', lang)}**")
+            st.caption(t("path_check_ad_body", lang))
+            st.caption(t("home_upload_hint", lang))
+
     # -- what can you find --
     section_label(t("find_heading", lang))
     for position, (column, category) in enumerate(
@@ -540,6 +597,17 @@ def render_home() -> None:
     section_title(t("journey_line", lang))
     st.markdown(sahulat_path_svg(lang), unsafe_allow_html=True)
     st.markdown(sahulat_path_vertical(lang), unsafe_allow_html=True)
+
+    # -- why Sahulat (V2 P0-8) --
+    section_label(t("benefits_heading", lang))
+    benefits = ("personal", "evidence", "bilingual", "realworld")
+    for column, name in zip(st.columns(4), benefits):
+        with column:
+            st.markdown(
+                f'<div class="sa-benefit">'
+                f'<div class="sa-benefit-title">{t(f"benefit_{name}_title", lang)}</div>'
+                f'<div class="sa-benefit-body">{t(f"benefit_{name}_body", lang)}</div>'
+                f'</div>', unsafe_allow_html=True)
 
     # -- three principles --
     section_label(t("principles_heading", lang))
@@ -567,7 +635,7 @@ def render_home() -> None:
             st.markdown(f'<div class="sa-stat-num">{health["total"]}</div>'
                         f'<div class="sa-stat-label">{t("catalogue_stat", lang)}</div>',
                         unsafe_allow_html=True)
-            st.markdown(f'<div style="height:1rem"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="sa-spacer"></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="sa-stat-num">{sourced}</div>'
                         f'<div class="sa-stat-label">{t("sourced_stat", lang)}</div>',
                         unsafe_allow_html=True)
@@ -575,7 +643,7 @@ def render_home() -> None:
             st.markdown(f'<div class="sa-stat-num">{providers}</div>'
                         f'<div class="sa-stat-label">{t("authorities_stat", lang)}</div>',
                         unsafe_allow_html=True)
-            st.markdown(f'<div style="height:1rem"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="sa-spacer"></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="sa-stat-num">0</div>'
                         f'<div class="sa-stat-label">{t("identifiers_stat", lang)}</div>',
                         unsafe_allow_html=True)
@@ -810,8 +878,359 @@ def answer_value(profile: UserProfile, field_name: str) -> str:
     return str(value)
 
 
-def render_answer_summary(profile: UserProfile) -> None:
-    with st.expander(t("your_answers", lang)):
+RESULT_PILL = {MET: "pill-good", UNMET: "pill-no", UNKNOWN: "pill-verify"}
+
+
+def render_ai_text(result, key_prefix: str = "") -> None:
+    """
+    Show a model answer, or say plainly why there isn't one (P2-5).
+
+    An answer and a failure notice used to render identically - same blue box,
+    same weight - so a user could not tell which they were reading. They are
+    now visually different, and the notice names what is *not* affected, since
+    the eligibility result never depended on the model in the first place.
+
+    A raw API error is never shown. "Gemini API error 429" tells a scholarship
+    applicant nothing they can act on.
+    """
+    if result is None:
+        return
+    if getattr(result, "ok", True):
+        st.info(str(result))
+        return
+
+    reason = getattr(result, "reason", "")
+    if reason == REASON_NO_EVIDENCE:
+        callout(str(result), title=t("no_evidence_heading", lang), tone="verify")
+    elif reason == REASON_OFFLINE:
+        callout(t("ai_mock_explainer", lang), title=t("ai_offline_heading", lang),
+                tone="info")
+    else:
+        callout(t("ai_unavailable_body", lang),
+                title=t("ai_unavailable_heading", lang), tone="verify")
+
+
+def render_scorecard(match) -> None:
+    """
+    The eligibility scorecard (V2 P0-1).
+
+    Requirement / your information / result, one row per condition, so a user
+    can see exactly what was checked rather than being asked to trust a
+    verdict. The header counts conditions; it is deliberately NOT a
+    percentage "fit" score. The spec permits "another clearly defined
+    profile-match representation", and a count is one the reader can verify
+    against the rows directly beneath it, whereas a percentage would imply a
+    probability of success that no rule in this system computes.
+    """
+    score = match.scorecard()
+    st.markdown(f"**{t('scorecard_heading', lang)}**")
+
+    extra = ""
+    if score["unmet"] or score["unknown"]:
+        extra = (f'<span class="sa-score-extra">'
+                 f'{t("scorecard_summary_extra", lang, unmet=score["unmet"], unknown=score["unknown"])}'
+                 f'</span>')
+    segments = "".join(
+        f'<span class="sa-score-seg seg-{name}" style="flex:{score[name]}"></span>'
+        for name in ("met", "unmet", "unknown") if score[name])
+    st.markdown(
+        f'<div class="sa-score-head">'
+        f'<span class="sa-score-num">'
+        f'{t("scorecard_summary", lang, met=score["met"], total=score["total"])}</span>'
+        f'{extra}</div>'
+        f'<div class="sa-score-bar">{segments}</div>',
+        unsafe_allow_html=True)
+
+    rows = []
+    for check in match.applicable_checks():
+        title, required, actual, result = scorecard_row(check, lang)
+        rows.append(
+            f'<tr><td><span class="sa-req">{title}</span>'
+            f'<span class="sa-reqsub">{required}</span></td>'
+            f'<td class="sa-reqval">{actual}</td>'
+            f'<td><span class="sa-pill {RESULT_PILL.get(check.status, "pill-verify")}">'
+            f'{result}</span></td></tr>')
+    st.markdown(
+        f'<div class="sa-scorecard"><table>'
+        f'<thead><tr><th>{t("col_requirement", lang)}</th>'
+        f'<th>{t("col_your_answer", lang)}</th>'
+        f'<th>{t("col_result", lang)}</th></tr></thead>'
+        f'<tbody>{"".join(rows)}</tbody></table></div>',
+        unsafe_allow_html=True)
+    st.caption(t("scorecard_no_score_note", lang))
+
+
+def render_reasons(match) -> None:
+    """
+    Why this result came out the way it did (V2 P0-2).
+
+    Three separate questions, kept separate because they call for different
+    responses: what passed, what failed, and what could not be checked.
+    """
+    satisfied, blockers, gaps = match.satisfied(), match.blockers(), match.gaps()
+
+    if blockers:
+        st.markdown(f"**{t('why_you_dont', lang)}**")
+        for check in blockers:
+            st.markdown(f"- {describe_gap(check, lang)}")
+        st.caption(t("decisive_note", lang))
+
+        # "What would change this" - the requirement and the profile's own
+        # value, and nothing about what would follow from changing it.
+        st.markdown(f"**{t('what_would_change', lang)}**")
+        st.caption(t("what_would_change_caveat", lang))
+
+    if gaps:
+        st.markdown(f"**{t('what_needs_verification', lang)}**")
+        for check in gaps:
+            st.markdown(f"- {describe_gap(check, lang)}")
+        if match.missing_profile_fields:
+            names = [profile_field_label(f, lang) for f in match.missing_profile_fields]
+            st.caption(t("missing_fields_hint", lang, fields=join_list(names, lang)))
+
+    if satisfied:
+        st.markdown(f"**{t('why_you_match', lang)}**")
+        for check in satisfied:
+            title, detail = describe_check(check, lang)
+            st.markdown(f"- {title}: {detail}")
+
+
+def render_next_action(match, key_suffix: str = "") -> None:
+    """
+    One next step, prominently (V2 P0-6).
+
+    Deliberately outside the detail expander: a user who never opens the
+    details still needs to know what to do. The decision of which action this
+    is belongs to core/next_action.py.
+    """
+    ticked = ticked_documents(match.opportunity)
+    action = next_action(match, ticked)
+    tone = "sa-next actionable" if is_actionable_now(match, ticked) else "sa-next"
+    st.markdown(
+        f'<div class="{tone}"><div class="sa-next-label">{t("next_step_label", lang)}</div>'
+        f'<div class="sa-next-body">{describe_next_action(action, lang)}</div></div>',
+        unsafe_allow_html=True)
+
+    if action.key == ACTION_ANSWER_MISSING:
+        if st.button(t("action_answer_now", lang),
+                     key=f"answer_now_{match.opportunity.opportunity_id}{key_suffix}"):
+            go_to(1)
+    elif action.url:
+        st.markdown(f'<a class="sa-source-link" href="{action.url}" target="_blank"'
+                    f' rel="noopener">{t("open_official_site", lang)}'
+                    f' <span class="sa-arrow">\u2197</span></a>', unsafe_allow_html=True)
+
+
+def _num_or_none(value, as_int=False):
+    """Streamlit gives back None for an empty number box; keep it None."""
+    if value is None:
+        return None
+    return int(value) if as_int else float(value)
+
+
+def render_correction(opportunity) -> None:
+    """
+    Let the user fix what the model read (V2 P0-4, step 4).
+
+    Extraction from a photograph is not reliable, and the rules engine will
+    treat whatever comes out of it as fact. Giving the user the edit is what
+    keeps a misread number from silently becoming an eligibility verdict.
+
+    Corrections are applied to the in-memory record only - nothing is written
+    back to the catalogue, and the record keeps its user_uploaded trust level
+    either way (Invariant 4).
+    """
+    conditions = opportunity.eligibility_conditions
+    with st.expander(t("correct_heading", lang)):
+        st.caption(t("correct_note", lang))
+
+        col1, col2 = st.columns(2, gap="large")
+        with col1:
+            min_age = st.number_input(profile_field_label("age", lang) + " — min",
+                                      min_value=AGE_MIN, max_value=AGE_MAX, step=1,
+                                      value=_num_or_none(conditions.min_age, True),
+                                      placeholder=t("correct_none", lang), key="fix_min_age")
+            max_age = st.number_input(profile_field_label("age", lang) + " — max",
+                                      min_value=AGE_MIN, max_value=AGE_MAX, step=1,
+                                      value=_num_or_none(conditions.max_age, True),
+                                      placeholder=t("correct_none", lang), key="fix_max_age")
+            provinces = st.multiselect(profile_field_label("domicile_province", lang),
+                                       options=list(PROVINCES),
+                                       default=[p for p in (conditions.domicile_provinces or [])
+                                                if p in PROVINCES],
+                                       key="fix_provinces")
+        with col2:
+            levels = [None] + list(EDUCATION_LEVELS)
+            current = conditions.min_education_level
+            education = st.selectbox(
+                profile_field_label("education_level", lang), options=levels,
+                index=levels.index(current) if current in levels else 0,
+                format_func=lambda v: t("correct_none", lang) if v is None
+                else education_label(v, lang), key="fix_education")
+            marks = st.number_input(profile_field_label("marks_percentage", lang),
+                                    min_value=float(MARKS_MIN), max_value=float(MARKS_MAX),
+                                    step=1.0, value=_num_or_none(conditions.min_marks_percentage),
+                                    placeholder=t("correct_none", lang), key="fix_marks")
+            income = st.number_input(profile_field_label("monthly_household_income", lang),
+                                     min_value=0.0, max_value=float(INCOME_MAX), step=1000.0,
+                                     value=_num_or_none(conditions.max_monthly_household_income),
+                                     placeholder=t("correct_none", lang), key="fix_income")
+
+        deadline = st.text_input(t("deadline_label", lang),
+                                 value=conditions.application_deadline or "",
+                                 help=t("correct_deadline_hint", lang), key="fix_deadline")
+
+        if st.button(t("correct_apply", lang), key="apply_fixes", type="primary"):
+            conditions.min_age = min_age
+            conditions.max_age = max_age
+            conditions.domicile_provinces = provinces or None
+            conditions.min_education_level = education
+            conditions.min_marks_percentage = marks
+            conditions.max_monthly_household_income = income
+            conditions.application_deadline = deadline.strip() or None
+            st.session_state.upload_corrected = True
+            st.session_state.upload_match = None      # force a fresh screening
+            st.rerun()
+
+
+def opportunity_facts(opportunity) -> str:
+    """
+    The record's own statements, for the plain-language rewrite (P1-7).
+
+    Built ONLY from what the record says. No profile, no eligibility result:
+    a model that is never told the verdict cannot leak it into the wording or
+    tell the reader they qualify.
+    """
+    conditions = opportunity.eligibility_conditions
+    stated, _ = describe_requirements(conditions, lang)
+    lines = [f"Name: {opportunity.name}",
+             f"Provider: {opportunity.provider}",
+             f"Category: {opportunity.category}"]
+    if opportunity.target_group:
+        lines.append(f"Intended for: {opportunity.target_group}")
+    if opportunity.summary_en:
+        lines.append(f"Summary: {opportunity.summary_en}")
+    if stated:
+        lines.append("Conditions stated in the record:")
+        lines.extend(f"  - {title}: {value}" for title, value in stated)
+    if conditions.special_quota_note:
+        lines.append(f"Preference noted: {conditions.special_quota_note}")
+    if opportunity.required_documents:
+        lines.append("Documents required: " + "; ".join(opportunity.required_documents))
+    if opportunity.application_steps:
+        lines.append("How to apply: " + " -> ".join(opportunity.application_steps))
+    if conditions.application_deadline:
+        lines.append(f"Deadline: {conditions.application_deadline}")
+    lines.append(f"Official page: {opportunity.official_url or 'not stated in the record'}")
+    return "\n".join(lines)
+
+
+def render_plain_language(opportunity) -> None:
+    """
+    Explain Like I'm New (P1-7).
+
+    Placed AFTER the scorecard, never instead of it. The rewrite is a reading
+    aid; the conditions above remain the authority, and the caveat says so.
+    """
+    key = f"eli5_{opportunity.opportunity_id}"
+    if st.button(t("eli5_button", lang), key=f"btn_{key}"):
+        with st.spinner(""):
+            st.session_state.simplified[key] = simplify_opportunity(
+                opportunity_facts(opportunity), lang)
+
+    result = st.session_state.simplified.get(key)
+    if not result:
+        return
+
+    st.markdown(f"**{t('eli5_heading', lang)}**")
+    if result.get("_error"):
+        callout(t("error_busy", lang), tone="verify")
+        return
+
+    for section in SIMPLIFY_SECTIONS:
+        body = result.get(section)
+        if body:
+            st.markdown(f'<div class="sa-eli5"><div class="sa-eli5-q">'
+                        f'{t("eli5_" + section, lang)}</div>'
+                        f'<div class="sa-eli5-a">{body}</div></div>',
+                        unsafe_allow_html=True)
+    if result.get("_mock"):
+        st.caption(t("ai_mock_explainer", lang))
+    st.caption(t("eli5_caveat", lang))
+
+
+def contextual_questions(match) -> list:
+    """
+    The questions worth offering for THIS result (P1-3).
+
+    Driven by the match state, so a user who is eligible is never offered
+    "why am I not eligible?" - a blank chatbot asks the user to guess what it
+    knows, and a wrong suggestion is worse than none.
+    """
+    chips = []
+    if match.blockers():
+        chips.append("chip_why_not_eligible")
+    else:
+        chips.append("chip_why_eligible")
+    if match.gaps():
+        chips.append("chip_what_verify")
+    if match.opportunity.required_documents:
+        chips.append("chip_this_documents")
+    if match.deadline:
+        chips.append("chip_this_deadline")
+    if match.opportunity.official_url:
+        chips.append("chip_where_apply")
+    return chips[:4]
+
+
+def render_contextual_followup(match) -> None:
+    """
+    Grounded Q&A about one opportunity (P1-3).
+
+    Evidence comes from this record alone. Retrieving across the catalogue
+    would hand the model text about a different scheme labelled "evidence",
+    which is how a confident answer about the wrong scholarship gets written.
+    """
+    opportunity = match.opportunity
+    st.markdown(f"**{t('ask_about_this', lang)}**")
+    st.caption(t("ask_scoped_note", lang))
+
+    state_key = f"ctx_answer_{opportunity.opportunity_id}"
+    chips = contextual_questions(match)
+    for column, chip in zip(st.columns(len(chips)), chips):
+        with column:
+            if st.button(t(chip, lang), key=f"{chip}_{opportunity.opportunity_id}",
+                         use_container_width=True):
+                evidence = get_rag_index().retrieve_for(
+                    opportunity.opportunity_id, t(chip, lang))
+                with st.spinner(""):
+                    st.session_state[state_key] = answer_followup(
+                        t(chip, lang), evidence, lang)
+                st.rerun()
+
+    answer = st.session_state.get(state_key)
+    if not answer:
+        st.caption(t("answer_empty_hint", lang))
+    else:
+        render_ai_text(answer)
+        if opportunity.official_url:
+            st.markdown(f'<a class="sa-source-link" href="{opportunity.official_url}"'
+                        f' target="_blank" rel="noopener">{t("open_official_site", lang)}'
+                        f' <span class="sa-arrow">\u2197</span></a>', unsafe_allow_html=True)
+
+
+def render_passport(profile) -> None:
+    """
+    The Opportunity Passport (P1-4).
+
+    This is the existing session profile given a name and a visible home. The
+    privacy line is not decoration: it states what is deliberately absent, and
+    what is absent is the entire reason this can be reused freely.
+    """
+    percent = completion_percent(profile)
+    with st.expander(f"{t('passport_heading', lang)} — "
+                     f"{t('passport_complete', lang, percent=percent)}"):
+        st.caption(t("passport_lede", lang))
         st.markdown(
             "".join(
                 f'<div class="sa-answer">'
@@ -819,64 +1238,254 @@ def render_answer_summary(profile: UserProfile) -> None:
                 f'<span class="sa-answer-value">{answer_value(profile, f)}</span></div>'
                 for f in PROFILE_FIELDS),
             unsafe_allow_html=True)
-        st.caption(t("detail_completeness", lang, percent=completion_percent(profile)))
+        if percent < 70:
+            st.caption(t("more_detail_hint", lang))
+        st.caption(t("passport_privacy", lang))
         if st.button(t("nav_edit_answers", lang), key="edit_answers"):
             go_to(1)
 
 
-def render_checks(match) -> None:
-    st.markdown(f"**{t('why_matches_you', lang)}**")
+def render_comparison(results) -> None:
+    """
+    Side-by-side comparison (P1-5).
+
+    The summary line compares EFFORT, from countable things, and says so. It
+    never recommends: a smaller award with a shorter form is "less work", which
+    has nothing to do with which is worth having.
+    """
+    if len(results) < 2:
+        return
+
+    section_label(t("compare_heading", lang))
+    st.caption(t("compare_hint", lang))
+
+    by_id = {r.opportunity.opportunity_id: r for r in results}
+    chosen = st.multiselect(
+        t("compare_heading", lang), options=list(by_id),
+        format_func=lambda i: by_id[i].opportunity.display_name(lang),
+        default=[], key="compare_pick", label_visibility="collapsed")
+    if len(chosen) < 2:
+        return
+
+    picked = [by_id[i] for i in chosen]
+    comparison = compare(picked, st.session_state.documents_ready)
+    rows = {row.opportunity_id: row for row in comparison.rows}
+
+    factors = [
+        (t("compare_eligibility", lang),
+         lambda r: status_label(r.status, lang)),
+        (t("compare_conditions", lang),
+         lambda r: f"{r.met} / {r.total}"),
+        (t("compare_deadline", lang),
+         lambda r: r.deadline or t("urgency_unknown", lang)),
+        (t("compare_documents", lang),
+         lambda r: str(r.documents_missing) if r.documents_total else "\u2014"),
+        (t("compare_verification", lang), lambda r: str(r.gaps)),
+        (t("compare_apply", lang),
+         lambda r: t("option_yes", lang) if r.has_official_url else t("option_no", lang)),
+    ]
+
+    header = "".join(f"<th>{rows[i].name}</th>" for i in chosen)
+    body = "".join(
+        f'<tr><td class="sa-compare-factor">{label}</td>'
+        + "".join(f"<td>{value(rows[i])}</td>" for i in chosen)
+        + "</tr>"
+        for label, value in factors)
     st.markdown(
-        "".join(
-            f'<div class="sa-checkrow">'
-            f'<span class="sa-mark {CHECK_CLASS.get(c.status, "mark-verify")}">'
-            f'{CHECK_MARK.get(c.status, "-")}</span>'
-            f'<span><span class="sa-checkname">{describe_check(c, lang)[0]}</span><br>'
-            f'<span class="sa-checkdetail">{describe_check(c, lang)[1]}</span></span></div>'
-            for c in match.applicable_checks()),
+        f'<div class="sa-scorecard"><table>'
+        f'<thead><tr><th>{t("compare_factor", lang)}</th>{header}</tr></thead>'
+        f"<tbody>{body}</tbody></table></div>",
         unsafe_allow_html=True)
-    if match.missing_profile_fields:
-        names = [profile_field_label(f, lang) for f in match.missing_profile_fields]
-        st.caption(t("missing_fields_hint", lang, fields=join_list(names, lang)))
+
+    callout(describe_comparison(comparison, lang))
+    st.caption(t("compare_effort_caveat", lang))
+
+
+def render_impact(results) -> None:
+    """
+    What this session actually did (P2-2).
+
+    Three of the four figures are counts of real work. The fourth is an
+    estimate, and it is the only one carrying a badge, a stated basis and the
+    arithmetic that produced it - because this panel exists to be shown to
+    judges, and an unlabelled invented number would cost the counted ones
+    their credibility.
+    """
+    impact = measure(results)
+    if impact.is_empty():
+        return
+
+    basis = estimate_basis()
+    section_label(t("impact_heading", lang))
+
+    figures = [
+        (impact.opportunities_screened, t("impact_screened", lang), ""),
+        (impact.requirements_checked, t("impact_requirements", lang), ""),
+        (impact.documents_identified, t("impact_documents", lang), ""),
+        (f"~{impact.estimated_minutes_saved}", t("impact_minutes", lang),
+         badge(t("impact_estimate_badge", lang), "tone-verify")),
+    ]
+    for column, (value, label, mark) in zip(st.columns(4), figures):
+        with column:
+            st.markdown(
+                f'<div class="sa-impact">'
+                f'<div class="sa-stat-num">{value}</div>'
+                f'<div class="sa-stat-label">{label}</div>'
+                f'<div class="sa-impact-mark">{mark}</div></div>',
+                unsafe_allow_html=True)
+
+    st.caption(t("impact_counted_note", lang))
+    st.caption(t("impact_estimate_note", lang,
+                 n=impact.opportunities_screened,
+                 minutes=basis["minutes_per_lookup"]))
+
+
+def render_empty_state(key_suffix: str = "") -> None:
+    """
+    An empty result with routes out of it (P2-4).
+
+    A blank "no matches" is a dead end, and it also invites the wrong reading:
+    that the user does not qualify for anything. The likelier explanation is
+    that our catalogue is three records long, so say that too.
+    """
+    callout(t("empty_body", lang), title=t("empty_heading", lang), tone="verify")
+    st.markdown(f"**{t('empty_try_heading', lang)}**")
+
+    answers_col, categories_col, upload_col = st.columns(3)
+    with answers_col:
+        if st.button(t("empty_try_answers", lang), key=f"empty_answers{key_suffix}",
+                     use_container_width=True):
+            go_to(1)
+    with categories_col:
+        if st.button(t("empty_try_categories", lang), key=f"empty_categories{key_suffix}",
+                     use_container_width=True):
+            go_to(0)
+    with upload_col:
+        st.button(t("empty_try_upload", lang), key=f"empty_upload{key_suffix}",
+                  use_container_width=True, disabled=True,
+                  help=t("home_upload_hint", lang))
+    st.caption(t("empty_catalogue_note", lang, n=health["total"]))
+
+
+def render_top_matches(results) -> None:
+    """
+    The shortlist (V2 P0-3).
+
+    Ranking is computed in core/rules_engine.evaluate_all from structured
+    facts only; this just shows the head of that list together with the
+    reason it is there. If nothing qualifies, nothing is shown - a shortlist
+    padded with weak matches is worse than no shortlist.
+    """
+    shortlist = top_matches(results)
+    if not shortlist:
+        return
+
+    section_label(t("top_matches_heading", lang))
+    st.markdown(f'<p class="sa-section-lede">{t("top_matches_lede", lang)}</p>',
+                unsafe_allow_html=True)
+
+    for position, (column, match) in enumerate(
+            zip(st.columns(len(shortlist)), shortlist), start=1):
+        opportunity = match.opportunity
+        reason = describe_ranking_reason(ranking_factors(match), lang)
+        with column:
+            st.markdown(
+                f'<div class="sa-top {reveal(f"{results_token()}:top", position)}">'
+                f'<div class="sa-top-rank">{position:02d}</div>'
+                f'<div class="sa-top-name">{opportunity.display_name(lang)}</div>'
+                f'<div class="sa-top-provider">{opportunity.provider}</div>'
+                f'<div class="sa-top-status">'
+                f'{badge(status_label(match.overall_status, lang), STATUS_CLASS.get(match.overall_status, "tone-mute"))}'
+                f'</div>'
+                f'<div class="sa-top-reason">{reason}</div></div>',
+                unsafe_allow_html=True)
+
+
+FRESHNESS_CLASS = {"recent": "tone-good", "aging": "tone-verify",
+                   "stale": "tone-no", "never": "tone-verify"}
 
 
 def render_source_card(opportunity) -> None:
-    """Provenance as a visible block, not a footnote (spec sections 23 and 54)."""
+    """
+    Provenance as a visible block, not a footnote (spec 23/54, extended by
+    P1-6 and P1-8).
+
+    Every field the brief asks for is labelled and on screen: source document,
+    organisation, official page, last verified - plus a freshness state, so
+    "we have this on file" is never mistaken for "this is current".
+    """
     verified = opportunity.is_verified()
-    status = t("source_verified", lang) if verified else t("source_needs_check", lang)
-    meta = (f'{t("source_last_checked", lang)}: {opportunity.last_verified}'
-            if verified else t("source_not_checked", lang))
-    link = ""
-    if opportunity.official_url:
-        link = (f'<a class="sa-source-link" href="{opportunity.official_url}"'
-                f' target="_blank" rel="noopener">{t("open_official_site", lang)}'
-                f' <span class="sa-arrow">↗</span></a>')
+    freshness = record_freshness(opportunity)
+    age = days_since_verified(opportunity)
+    fresh_label, fresh_detail = describe_freshness(freshness, age, lang)
+
+    rows = [(t("source_org_label", lang), opportunity.provider)]
+    if opportunity.source_title:
+        rows.append((t("source_title_label", lang), opportunity.source_title))
+    rows.append((t("source_last_checked", lang),
+                 opportunity.last_verified if verified else t("source_not_checked", lang)))
+
+    link = (f'<a class="sa-source-link" href="{opportunity.official_url}"'
+            f' target="_blank" rel="noopener">{t("open_official_site", lang)}'
+            f' <span class="sa-arrow">\u2197</span></a>'
+            if opportunity.official_url
+            else f'<div class="sa-source-meta">{t("source_none", lang)}</div>')
+
     st.markdown(
         f'<div class="sahulat-source{" verified" if verified else ""}">'
-        f'<div class="sa-source-label">{t("source_heading", lang)} — {status}</div>'
-        f'<div class="sa-source-name">{opportunity.provider}</div>'
-        f'<div class="sa-source-meta">{opportunity.source_title or ""}</div>'
-        f'<div class="sa-source-meta">{meta}</div>{link}</div>',
+        f'<div class="sa-source-head">'
+        f'<span class="sa-source-label">{t("source_heading", lang)}</span>'
+        f'{badge(fresh_label, FRESHNESS_CLASS.get(freshness, "tone-verify"))}</div>'
+        + "".join(f'<div class="sa-answer">'
+                  f'<span class="sa-answer-label">{label}</span>'
+                  f'<span class="sa-answer-value">{value}</span></div>'
+                  for label, value in rows)
+        + f'<div class="sa-source-meta">{fresh_detail}</div>{link}</div>',
         unsafe_allow_html=True)
-    if not verified:
-        st.caption(t("source_verify_body", lang))
+
+    if should_prompt_verification(opportunity):
+        st.caption(t("freshness_prompt", lang))
+
+
+def ticked_documents(opportunity) -> set:
+    """
+    Which checklist boxes are ticked RIGHT NOW.
+
+    Read from the widget keys rather than the derived set in session state.
+    Same trap as UX-07: the derived set is only rebuilt when render_documents
+    runs, so anything rendered before it - the readiness figure, the next step -
+    would otherwise show the previous interaction's answer. Widget state, by
+    contrast, already holds the new value at the top of the rerun.
+    """
+    stored = st.session_state.documents_ready.get(opportunity.opportunity_id, set())
+    ticked = set()
+    for index in range(len(opportunity.required_documents or [])):
+        key = f"doc_{opportunity.opportunity_id}_{index}"
+        if st.session_state.get(key, index in stored):
+            ticked.add(index)
+    return ticked
 
 
 def render_documents(opportunity) -> None:
     """
-    Document readiness.
+    Application readiness (P1-1), built on the document checklist.
 
-    ORDERING MATTERS (UX-07): the count and the progress bar must be written
-    AFTER the checkboxes have been read, otherwise they render the previous
-    run's state and lag one interaction behind - ticking the last box left the
-    bar short, and unticking one left it full. A container reserved above the
-    list lets us write into it once the true count is known.
+    ORDERING MATTERS (UX-07): the readiness figure must be written AFTER the
+    checkboxes have been read, otherwise it renders the previous run's state
+    and lags one interaction behind. A container reserved above the list lets
+    us write into it once the true count is known.
+
+    The percentage here is honest in a way a "profile match %" would not be:
+    every term is something the user ticked or the record lists, and it is
+    computed from the very rows shown beneath it.
     """
+    st.markdown(f"**{t('readiness_heading', lang)}**")
     if not opportunity.required_documents:
+        # "No documents listed" is a gap in our record, not permission to
+        # turn up empty-handed. Saying nothing would imply the latter.
+        st.caption(t("documents_none_listed", lang))
         return
 
-    total = len(opportunity.required_documents)
-    st.markdown(f"**{t('document_checklist_heading', lang)}**")
     summary_slot = st.container()          # filled in below, once we know the count
 
     previously_ready = st.session_state.documents_ready.get(
@@ -888,9 +1497,60 @@ def render_documents(opportunity) -> None:
             ready.add(index)
     st.session_state.documents_ready[opportunity.opportunity_id] = ready
 
+    state = readiness(opportunity, ready)
     with summary_slot:
-        st.caption(t("documents_ready", lang, have=len(ready), total=total))
-        st.progress(len(ready) / total)
+        st.markdown(
+            f'<div class="sa-ready-head">'
+            f'<span class="sa-ready-num">{t("readiness_percent", lang, percent=state.percent)}</span>'
+            f'<span class="sa-ready-count">'
+            f'{t("documents_ready", lang, have=len(state.have), total=state.total)}</span>'
+            f'</div>', unsafe_allow_html=True)
+        st.progress(state.percent / 100)
+
+    if not state.have:
+        st.caption(t("documents_none_marked", lang))
+    if state.missing:
+        st.markdown(f'<div class="sa-ready-label">{t("documents_still_needed", lang)}</div>'
+                    '<div class="sa-unstated">'
+                    + "".join(f"<span>{document}</span>" for document in state.missing)
+                    + "</div>", unsafe_allow_html=True)
+    st.caption(t("readiness_note", lang))
+
+
+def render_deadline(match) -> None:
+    """
+    Deadline intelligence (P1-2).
+
+    Shows the state, the days, and - where there is no date - says so plainly.
+    An expired listing gets an explicit "do not prepare this" line: the brief
+    asks that users are never encouraged toward a closed application, and
+    silence next to a full document checklist is a form of encouragement.
+    """
+    urgency = deadline_urgency(match.deadline)
+    days = days_remaining(match.deadline)
+    label, detail = describe_urgency(urgency, days, lang)
+
+    st.markdown(
+        f'<div class="sa-deadline tone-{urgency}">'
+        f'<span class="sa-deadline-label">{label}</span>'
+        + (f'<span class="sa-deadline-detail">{detail}</span>' if detail and days is not None
+           else "")
+        + (f'<span class="sa-deadline-date">{match.deadline}</span>'
+           if match.deadline and urgency not in (URGENCY_UNKNOWN,) else "")
+        + '</div>', unsafe_allow_html=True)
+
+    if match.deadline_is_provisional and urgency != URGENCY_UNKNOWN:
+        # A countdown is the most confident thing on this page. If the date
+        # behind it is our placeholder rather than an announcement, the page
+        # has to say so where the countdown is, not in a footnote.
+        st.markdown(badge(t("deadline_provisional_badge", lang), "tone-verify"),
+                    unsafe_allow_html=True)
+        st.caption(t("deadline_provisional_note", lang))
+
+    if urgency == URGENCY_UNKNOWN:
+        st.caption(t("urgency_unknown_note", lang))
+    elif urgency == URGENCY_PASSED:
+        st.caption(t("urgency_passed_note", lang))
 
 
 def stage_markup(labels, active: int, note: str = "") -> str:
@@ -1051,17 +1711,29 @@ def render_timeline(opportunity) -> None:
         unsafe_allow_html=True)
 
 
-def render_pipeline() -> None:
-    """Judge-facing view of how a result was produced (spec section 61)."""
+def render_pipeline(upload_path: bool = False) -> None:
+    """
+    How a result was produced (spec section 61, extended for V2 P0-7).
+
+    The point of showing this is not decoration: it is the claim that the
+    language model never decides eligibility, made checkable. Both entry
+    points - a curated record and an uploaded poster - end in the same rules
+    engine, and the explanation step sits after the decision, never before.
+    """
     with st.expander(t("how_generated", lang)):
+        st.markdown(f"**{t('architecture_heading', lang)}**")
+        st.caption(t("architecture_body", lang))
         steps = ["pipeline_profile", "pipeline_rules", "pipeline_match",
                  "pipeline_retrieval", "pipeline_explain"]
+        if upload_path:
+            steps = ["pipeline_extract"] + steps[1:]
         st.markdown(
             '<div class="sahulat-timeline">'
             + "".join(f'<div class="sa-tl-item"><div class="sa-tl-step">{i:02d}</div>'
                       f'<div class="sa-tl-body">{t(key, lang)}</div></div>'
                       for i, key in enumerate(steps, 1))
             + "</div>", unsafe_allow_html=True)
+        st.caption(t("architecture_same_engine", lang))
 
 
 def trust_badge(opportunity) -> str:
@@ -1123,33 +1795,48 @@ def render_match_card(match, rank: int = 0, highlight: bool = False,
         if match.listing_closed:
             callout(t("listing_closed_explainer", lang), tone="verify")
 
-        with st.expander(t("view_eligibility", lang), expanded=highlight):
-            render_checks(match)
-            quota_note = opportunity.eligibility_conditions.special_quota_note
-            if quota_note:
-                callout(quota_note, title=t("quota_note_label", lang), tone="info")
+        render_deadline(match)
+        render_next_action(match)
 
-            rule()
-            doc_col, time_col = st.columns(2, gap="large")
-            with doc_col:
+        with st.expander(t("view_eligibility", lang), expanded=highlight):
+            # P2-3: eight sections stacked in one scroll was the clutter. They
+            # group naturally by the question being asked - am I eligible,
+            # what do I need, who says so, help me understand - so the tabs
+            # follow the questions rather than the implementation.
+            eligibility_tab, documents_tab, source_tab, ask_tab = st.tabs([
+                t("tab_eligibility", lang), t("tab_documents", lang),
+                t("tab_source", lang), t("tab_ask", lang)])
+
+            with eligibility_tab:
+                render_scorecard(match)
+                rule()
+                render_reasons(match)
+                quota_note = opportunity.eligibility_conditions.special_quota_note
+                if quota_note:
+                    callout(quota_note, title=t("quota_note_label", lang), tone="info")
+
+            with documents_tab:
                 render_documents(opportunity)
-            with time_col:
+                rule()
                 render_timeline(opportunity)
 
-            rule()
-            render_source_card(opportunity)
+            with source_tab:
+                render_source_card(opportunity)
+                if opportunity.disclaimer:
+                    st.caption(opportunity.disclaimer)
 
-            if opportunity.disclaimer:
-                st.caption(opportunity.disclaimer)
-
-            explain_key = f"explain_{opportunity.opportunity_id}"
-            if st.button(t("ai_explain_button", lang), key=f"btn_{explain_key}"):
-                with st.spinner(""):
-                    st.session_state.explanations[explain_key] = explain_match(
-                        describe_profile(current_profile(), lang),
-                        build_result_summary(match), lang)
-            if explain_key in st.session_state.explanations:
-                st.info(st.session_state.explanations[explain_key])
+            with ask_tab:
+                render_plain_language(opportunity)
+                rule()
+                render_contextual_followup(match)
+                rule()
+                explain_key = f"explain_{opportunity.opportunity_id}"
+                if st.button(t("ai_explain_button", lang), key=f"btn_{explain_key}"):
+                    with st.spinner(""):
+                        st.session_state.explanations[explain_key] = explain_match(
+                            describe_profile(current_profile(), lang),
+                            build_result_summary(match), lang)
+                render_ai_text(st.session_state.explanations.get(explain_key))
     if animation:
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1219,10 +1906,7 @@ def render_followup() -> None:
         with st.spinner(""):
             evidence = get_rag_index().retrieve(question, top_k=3)
             answer = answer_followup(question, evidence, lang)
-        if evidence:
-            st.info(answer)
-        else:
-            callout(answer, tone="verify")
+        render_ai_text(answer)
 
 
 def render_results() -> None:
@@ -1232,8 +1916,7 @@ def render_results() -> None:
 
     if not filtered:
         section_title(t("empty_heading", lang), t("empty_body", lang))
-        if st.button(t("nav_edit_answers", lang), key="back_from_empty", type="primary"):
-            go_to(0)
+        render_empty_state(key_suffix="_none")
         return
 
     results = evaluate_all(profile, filtered)
@@ -1257,13 +1940,13 @@ def render_results() -> None:
     if heading_reveal:
         st.markdown("</div>", unsafe_allow_html=True)
 
-    render_answer_summary(profile)
-    if completion_percent(profile) < 70:
-        st.caption(t("more_detail_hint", lang))
+    render_passport(profile)
+
+    render_top_matches(results)
 
     strong = [r for r in results if r.overall_status == STATUS_ELIGIBLE]
     if not strong:
-        callout(t("empty_body", lang), title=t("empty_heading", lang), tone="verify")
+        render_empty_state()
 
     rank = 0
     for status, note_key in ((STATUS_ELIGIBLE, "group_eligible_help"),
@@ -1281,6 +1964,12 @@ def render_results() -> None:
                 match, rank=rank,
                 highlight=(rank == 1 and status == STATUS_ELIGIBLE),
                 animation=reveal(f"{token}:card", rank))
+
+    rule()
+    render_impact(results)
+
+    rule()
+    render_comparison(results)
 
     rule()
     render_pipeline()
@@ -1377,6 +2066,7 @@ with tab_read:
                 st.session_state.uploaded_opportunity = None
                 st.session_state.uploaded_raw = None
                 st.session_state.upload_match = None
+                st.session_state.upload_corrected = False
                 st.session_state.screen_upload = False
                 st.rerun()
 
@@ -1396,9 +2086,15 @@ with tab_read:
         render_extraction(opportunity, raw)
 
         rule()
+        render_correction(opportunity)
+        if st.session_state.get("upload_corrected"):
+            callout(t("correct_applied", lang), tone="info")
+
+        rule()
         if not current_profile().is_screenable():
             callout(t("upload_needs_profile", lang), tone="info")
         else:
+            st.caption(t("passport_reuse", lang))
             if not st.session_state.screen_upload:
                 if st.button(t("screen_uploaded", lang), type="primary"):
                     st.session_state.screen_upload = True
@@ -1411,6 +2107,8 @@ with tab_read:
                     match = evaluate(current_profile(), opportunity)
                     st.session_state.upload_match = match
                 render_match_card(match)
+                # Same engine, different entry point - shown, not asserted.
+                render_pipeline(upload_path=True)
 
     st.caption(t("upload_privacy_note", lang))
 
