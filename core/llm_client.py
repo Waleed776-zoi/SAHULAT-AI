@@ -48,6 +48,50 @@ SDK_NEW = "google-genai"
 SDK_LEGACY = "google-generativeai"
 
 
+# Reasons an answer is not a real model answer. Machine values; i18n words them.
+REASON_OFFLINE = "offline"          # no key configured
+REASON_ERROR = "error"              # the call failed
+REASON_NO_EVIDENCE = "no_evidence"  # nothing grounded to answer from
+
+
+class AiText(str):
+    """
+    A model answer that knows whether it actually is one (P2-5).
+
+    A plain string cannot tell the UI the difference between an explanation
+    and the sentence we print when the call failed, so both used to render
+    identically - in the same blue box, looking equally authoritative. That is
+    the failure this class exists to prevent.
+
+    It subclasses `str` deliberately: every existing caller keeps working
+    unchanged, and the extra state is additive rather than a migration.
+    """
+    ok: bool
+    reason: str
+
+    def __new__(cls, text: str, ok: bool = True, reason: str = ""):
+        value = super().__new__(cls, text)
+        value.ok = ok
+        value.reason = reason
+        return value
+
+
+def _language_instruction(language: str) -> str:
+    """
+    How to tell the model which language to answer in (P2-1).
+
+    Roman Urdu needs spelling out: asked for "Urdu", a model returns Urdu
+    script, which is precisely what a Roman Urdu reader chose not to have.
+    """
+    if language == "ur":
+        return "Respond in Urdu."
+    if language == "ur_roman":
+        return ("Respond in Roman Urdu - the Urdu language written in Latin script, "
+                "the way Pakistanis type in everyday messages. Do NOT use Urdu script. "
+                "Keep common English words (scholarship, documents, deadline) as they are.")
+    return "Respond in English."
+
+
 def _get_secret(name: str) -> Optional[str]:
     """Read a setting from the environment, else from Streamlit secrets."""
     value = os.environ.get(name)
@@ -201,11 +245,20 @@ STRICT RULES:
 """
 
 
-def explain_match(profile_summary: str, match_result_summary: str, language: str = "en") -> str:
-    if _client() is None:
-        return _mock_explanation(match_result_summary, language)
+def explain_match(profile_summary: str, match_result_summary: str,
+                  language: str = "en") -> AiText:
+    """
+    Plain-language explanation of a decision the rules engine already made.
 
-    lang_instruction = "Respond in Urdu." if language == "ur" else "Respond in English."
+    Always returns an AiText. When `.ok` is False the text is a notice, not an
+    explanation, and the UI must present it as such - the eligibility result
+    itself is rules-based and unaffected either way.
+    """
+    if _client() is None:
+        return AiText(_mock_explanation(match_result_summary, language),
+                      ok=False, reason=REASON_OFFLINE)
+
+    lang_instruction = _language_instruction(language)
     prompt = (
         f"{lang_instruction}\n\n"
         f"User profile:\n{profile_summary}\n\n"
@@ -213,10 +266,12 @@ def explain_match(profile_summary: str, match_result_summary: str, language: str
         f"{match_result_summary}"
     )
     try:
-        return _generate(EXPLAIN_SYSTEM_PROMPT, [prompt])
+        return AiText(_generate(EXPLAIN_SYSTEM_PROMPT, [prompt]))
     except Exception as exc:
         log.warning("explain_match failed: %s", exc)
-        return t("ai_unavailable", language)
+        # The exception text is logged, never shown: "Gemini API error 429"
+        # tells a scholarship applicant nothing they can act on.
+        return AiText(t("ai_unavailable", language), ok=False, reason=REASON_ERROR)
 
 
 def _mock_explanation(match_result_summary: str, language: str) -> str:
@@ -273,7 +328,7 @@ def simplify_opportunity(facts: str, language: str = "en") -> Dict[str, Any]:
     if _client() is None:
         return {**_mock_simplification(facts, language), "_mock": True}
 
-    lang_instruction = "Write in simple Urdu." if language == "ur" else "Write in simple English."
+    lang_instruction = _language_instruction(language) + " Use simple words."
     try:
         raw = _generate(SIMPLIFY_SYSTEM_PROMPT,
                         [f"{lang_instruction}\n\nFacts from the record:\n{facts}"])
@@ -315,23 +370,33 @@ evidence. Keep answers short and cite which opportunity the evidence came from.
 """
 
 
-def answer_followup(question: str, evidence_snippets: List[str], language: str = "en") -> str:
+def answer_followup(question: str, evidence_snippets: List[str],
+                    language: str = "en") -> AiText:
+    """
+    Answer a question from supplied evidence only. Always returns an AiText.
+
+    `.ok` is False for all three non-answers - no evidence, no key, failed
+    call - because each of them is a notice the UI must present differently
+    from an answer, however similar they look as text.
+    """
     # No evidence means no grounded answer is possible. Say so rather than
     # letting the model improvise (BUG-06).
     if not evidence_snippets:
-        return t("no_evidence_found", language)
+        return AiText(t("no_evidence_found", language),
+                      ok=False, reason=REASON_NO_EVIDENCE)
 
     if _client() is None:
-        return _mock_chat_answer(question, language)
+        return AiText(_mock_chat_answer(question, language),
+                      ok=False, reason=REASON_OFFLINE)
 
-    lang_instruction = "Respond in Urdu." if language == "ur" else "Respond in English."
+    lang_instruction = _language_instruction(language)
     evidence_block = "\n---\n".join(evidence_snippets)
     prompt = f"{lang_instruction}\n\nEvidence:\n{evidence_block}\n\nQuestion: {question}"
     try:
-        return _generate(CHAT_SYSTEM_PROMPT, [prompt])
+        return AiText(_generate(CHAT_SYSTEM_PROMPT, [prompt]))
     except Exception as exc:
         log.warning("answer_followup failed: %s", exc)
-        return t("ai_unavailable", language)
+        return AiText(t("ai_unavailable", language), ok=False, reason=REASON_ERROR)
 
 
 def _mock_chat_answer(question: str, language: str) -> str:

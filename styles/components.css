@@ -561,6 +561,14 @@
 /* ---------- Comparison (P1-5) ---------- */
 .sa-compare-factor { font-weight: 600; color: var(--muted); white-space: nowrap; }
 
+/* ---------- Impact (P2-2) ---------- */
+.sa-impact {
+  border-top: 2px solid var(--border); padding-top: var(--s3);
+  padding-inline-end: var(--s3); height: 100%;
+}
+.sa-impact .sa-stat-num { line-height: 1.1; }
+.sa-impact-mark { margin-top: var(--s2); min-height: 1.2rem; }
+
 /* ---------- Footer ---------- */
 .sa-footer {
   margin-top: var(--s10); padding-top: var(--s6);

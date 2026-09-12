@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple
 
+from core.i18n_roman import ROMAN
 from core.models import (
     ConditionCheck,
     STATUS_ELIGIBLE, STATUS_NEEDS_VERIFICATION, STATUS_NOT_ELIGIBLE,
@@ -22,6 +23,35 @@ from core.models import (
     CHECK_EXPERIENCE, CHECK_DEADLINE, CHECK_GENDER, CHECK_ENGLISH,
     CHECK_COMPUTER, CHECK_FIELD_OF_STUDY,
 )
+
+LANG_EN = "en"
+LANG_UR = "ur"
+LANG_ROMAN = "ur_roman"          # Urdu written in Latin script
+LANGUAGES = (LANG_EN, LANG_UR, LANG_ROMAN)
+
+# What each mode calls itself, in itself.
+LANGUAGE_NAMES = {
+    LANG_EN: "English",
+    LANG_UR: "\u0627\u0631\u062f\u0648",
+    LANG_ROMAN: "Roman Urdu",
+}
+
+
+def is_rtl(lang: str) -> bool:
+    """
+    Only Urdu script is right-to-left.
+
+    Roman Urdu is Urdu *language* in Latin *script*, so it lays out and sets
+    type exactly like English. Treating it as RTL - the obvious mistake, since
+    it is "the Urdu one" - would mirror the whole page for no reason.
+    """
+    return lang == LANG_UR
+
+
+def normalise_lang(lang: str) -> str:
+    """Fall back to English for anything we do not ship."""
+    return lang if lang in LANGUAGES else LANG_EN
+
 
 STRINGS: Dict[str, Dict[str, str]] = {
     # -- identity -----------------------------------------------------------
@@ -496,6 +526,66 @@ STRINGS: Dict[str, Dict[str, str]] = {
     "source_url_label": {"en": "Official page", "ur": "سرکاری صفحہ"},
     "source_none": {"en": "No official link on record", "ur": "کوئی سرکاری ربط درج نہیں"},
 
+    # ================= P2-4: empty states =================================
+    "empty_try_heading": {"en": "What you can try", "ur": "آپ کیا کر سکتے ہیں"},
+    "empty_try_categories": {"en": "Choose another category",
+                             "ur": "کوئی اور زمرہ منتخب کریں"},
+    "empty_try_answers": {"en": "Change your education level or domicile",
+                          "ur": "اپنی تعلیمی سطح یا ڈومیسائل تبدیل کریں"},
+    "empty_try_upload": {"en": "Upload an advertisement you found elsewhere",
+                         "ur": "کہیں اور سے ملا اشتہار اپلوڈ کریں"},
+    "empty_catalogue_note": {
+        "en": "Our catalogue currently holds {n} verified-source records. A small catalogue "
+              "is a limit of this prototype, not a judgement about you.",
+        "ur": "ہمارے پاس فی الحال {n} اندراجات ہیں۔ فہرست کا مختصر ہونا اس نمونے کی حد ہے، آپ کے بارے میں کوئی فیصلہ نہیں۔"},
+    "documents_none_marked": {
+        "en": "You haven't marked any documents as available yet.",
+        "ur": "آپ نے ابھی کوئی دستاویز دستیاب کے طور پر نشان زد نہیں کی۔"},
+    "documents_none_listed": {
+        "en": "This record does not list the documents required. Check the official page "
+              "before you apply - that is a gap in our record, not a sign that none are needed.",
+        "ur": "اس اندراج میں مطلوبہ دستاویزات درج نہیں۔ درخواست سے پہلے سرکاری صفحہ دیکھیں — یہ ہمارے اندراج کی کمی ہے، اس کا مطلب یہ نہیں کہ کوئی دستاویز درکار نہیں۔"},
+    "answer_empty_hint": {
+        "en": "Pick a question above to get an answer grounded in this record.",
+        "ur": "اوپر سے کوئی سوال منتخب کریں تاکہ اسی اندراج سے جواب مل سکے۔"},
+
+    # ================= P2-5: degraded AI ==================================
+    "ai_unavailable_heading": {"en": "AI explanation is temporarily unavailable",
+                               "ur": "اے آئی تشریح فی الحال دستیاب نہیں"},
+    "ai_unavailable_body": {
+        "en": "Everything else on this page is unaffected: your eligibility result, the "
+              "conditions checked, the official source and your document checklist are all "
+              "produced by rules, not by the AI.",
+        "ur": "اس صفحے پر باقی سب کچھ متاثر نہیں ہوا: آپ کا نتیجہ، جانچی گئی شرائط، سرکاری ماخذ اور دستاویزات کی فہرست — سب قواعد سے بنتے ہیں، AI سے نہیں۔"},
+    "ai_offline_heading": {"en": "Running without an API key", "ur": "بغیر اے پی آئی کلید کے"},
+    "no_evidence_heading": {"en": "We can't answer that from this record",
+                            "ur": "اس اندراج سے اس کا جواب نہیں دیا جا سکتا"},
+    "ai_retry": {"en": "Try again", "ur": "دوبارہ کوشش کریں"},
+
+    # ================= P2-2: impact ======================================
+    "impact_heading": {"en": "Sahulat impact", "ur": "سہولت کا اثر"},
+    "impact_screened": {"en": "opportunities screened", "ur": "مواقع جانچے گئے"},
+    "impact_requirements": {"en": "requirements checked", "ur": "شرائط جانچی گئیں"},
+    "impact_documents": {"en": "documents identified", "ur": "دستاویزات کی نشاندہی"},
+    "impact_minutes": {"en": "minutes of searching, estimated",
+                       "ur": "منٹ کی تلاش، تخمینہ"},
+    "impact_counted_note": {
+        "en": "Counted from this session only. Nothing is carried over between users, "
+              "and nothing here is stored.",
+        "ur": "صرف اسی سیشن سے شمار کیا گیا۔ کچھ بھی صارفین کے درمیان منتقل یا محفوظ نہیں ہوتا۔"},
+    "impact_estimate_note": {
+        "en": "The time figure is the only estimate: {n} opportunities × {minutes} minutes "
+              "assumed per manual lookup. Prototype estimate — not a measured "
+              "population-level claim.",
+        "ur": "وقت کا عدد ہی واحد تخمینہ ہے: {n} مواقع × {minutes} منٹ فی دستی تلاش۔ یہ نمونے کا تخمینہ ہے، کوئی ماپا گیا دعویٰ نہیں۔"},
+    "impact_estimate_badge": {"en": "Estimate", "ur": "تخمینہ"},
+
+    # ================= P2-3: result detail tabs ===========================
+    "tab_eligibility": {"en": "Eligibility", "ur": "اہلیت"},
+    "tab_documents": {"en": "Documents & steps", "ur": "دستاویزات اور مراحل"},
+    "tab_source": {"en": "Source", "ur": "ماخذ"},
+    "tab_ask": {"en": "Understand & ask", "ur": "سمجھیں اور پوچھیں"},
+
     # -- follow-up chat -----------------------------------------------------
     "ask_followup": {"en": "Ask a follow-up question", "ur": "مزید سوال پوچھیں"},
     "ask_followup_hint": {
@@ -898,11 +988,19 @@ def t(key: str, lang: str = "en", **kwargs: Any) -> str:
     Look up a string. Unknown keys return the key itself (so a missing string
     is visible in testing rather than silently blank). Any **kwargs are used
     as format placeholders.
+
+    Roman Urdu (P2-1) lives in its own table rather than as a third key in
+    every literal: it keeps the English/Urdu pairs - the two languages the
+    product promises - readable and reviewable side by side, and a gap in the
+    Roman table degrades to English rather than breaking a page.
     """
     entry = STRINGS.get(key)
     if not entry:
         return key
-    text = entry.get(lang) or entry.get("en") or key
+    if lang == LANG_ROMAN:
+        text = ROMAN.get(key) or entry.get("en") or key
+    else:
+        text = entry.get(lang) or entry.get("en") or key
     if kwargs:
         try:
             return text.format(**kwargs)
@@ -1066,7 +1164,9 @@ def _years(value: Any, lang: str) -> str:
         n = f"{f:g}"
     except (TypeError, ValueError):
         n = str(value)
-    return f"{n} " + ("سال" if lang == "ur" else "yrs")
+    if lang == LANG_UR:
+        return f"{n} سال"
+    return f"{n} " + ("saal" if lang == LANG_ROMAN else "yrs")
 
 
 # ---------------------------------------------------------------------------
@@ -1087,36 +1187,50 @@ _CHECK_LABEL_KEYS = {
 }
 
 _CHECK_TITLES = {
-    CHECK_AGE: {"en": "Age", "ur": "عمر"},
-    CHECK_DOMICILE: {"en": "Domicile", "ur": "ڈومیسائل"},
-    CHECK_EDUCATION: {"en": "Education level", "ur": "تعلیمی سطح"},
-    CHECK_MARKS: {"en": "Academic marks", "ur": "تعلیمی نمبر"},
-    CHECK_INCOME: {"en": "Household income", "ur": "گھریلو آمدنی"},
-    CHECK_ENROLLMENT: {"en": "Current enrollment", "ur": "موجودہ داخلہ"},
-    CHECK_EXISTING_SCHOLARSHIP: {"en": "Scholarship exclusivity", "ur": "اسکالرشپ کی شرط"},
-    CHECK_EMPLOYMENT: {"en": "Employment status", "ur": "ملازمت کی صورتحال"},
-    CHECK_EXPERIENCE: {"en": "Work experience", "ur": "کام کا تجربہ"},
-    CHECK_DEADLINE: {"en": "Application deadline", "ur": "درخواست کی آخری تاریخ"},
-    CHECK_GENDER: {"en": "Gender requirement", "ur": "جنس کی شرط"},
-    CHECK_ENGLISH: {"en": "English proficiency", "ur": "انگریزی کی استعداد"},
-    CHECK_COMPUTER: {"en": "Computer skills", "ur": "کمپیوٹر مہارت"},
-    CHECK_FIELD_OF_STUDY: {"en": "Field of study", "ur": "شعبہ تعلیم"},
+    CHECK_AGE: {"en": "Age", "ur": "عمر",
+                   "ur_roman": "Umar"},
+    CHECK_DOMICILE: {"en": "Domicile", "ur": "ڈومیسائل",
+                   "ur_roman": "Domicile"},
+    CHECK_EDUCATION: {"en": "Education level", "ur": "تعلیمی سطح",
+                   "ur_roman": "Taleemi darja"},
+    CHECK_MARKS: {"en": "Academic marks", "ur": "تعلیمی نمبر",
+                   "ur_roman": "Taleemi number"},
+    CHECK_INCOME: {"en": "Household income", "ur": "گھریلو آمدنی",
+                   "ur_roman": "Ghar ki aamdani"},
+    CHECK_ENROLLMENT: {"en": "Current enrollment", "ur": "موجودہ داخلہ",
+                   "ur_roman": "Maujooda enrollment"},
+    CHECK_EXISTING_SCHOLARSHIP: {"en": "Scholarship exclusivity", "ur": "اسکالرشپ کی شرط",
+                   "ur_roman": "Scholarship ki shart"},
+    CHECK_EMPLOYMENT: {"en": "Employment status", "ur": "ملازمت کی صورتحال",
+                   "ur_roman": "Mulazmat ki soorat-e-haal"},
+    CHECK_EXPERIENCE: {"en": "Work experience", "ur": "کام کا تجربہ",
+                   "ur_roman": "Kaam ka tajurba"},
+    CHECK_DEADLINE: {"en": "Application deadline", "ur": "درخواست کی آخری تاریخ",
+                   "ur_roman": "Aakhri tareekh"},
+    CHECK_GENDER: {"en": "Gender requirement", "ur": "جنس کی شرط",
+                   "ur_roman": "Jins ki shart"},
+    CHECK_ENGLISH: {"en": "English proficiency", "ur": "انگریزی کی استعداد",
+                   "ur_roman": "English ki mahaarat"},
+    CHECK_COMPUTER: {"en": "Computer skills", "ur": "کمپیوٹر مہارت",
+                   "ur_roman": "Computer hunar"},
+    CHECK_FIELD_OF_STUDY: {"en": "Field of study", "ur": "شعبہ تعلیم",
+                   "ur_roman": "Taleemi shoba"},
 }
 
-_REQUIRED_WORD = {"en": "Required", "ur": "درکار"}
-_YOU_WORD = {"en": "You", "ur": "آپ"}
-_NOT_PROVIDED = {"en": "not provided", "ur": "فراہم نہیں کیا گیا"}
-_AT_LEAST = {"en": "at least", "ur": "کم از کم"}
-_AT_MOST = {"en": "at most", "ur": "زیادہ سے زیادہ"}
-_BETWEEN = {"en": "between", "ur": "کے درمیان"}
-_AND = {"en": "and", "ur": "اور"}
-_OPEN_UNTIL = {"en": "Open until", "ur": "کھلا ہے"}
-_CLOSED_ON = {"en": "Closed on", "ur": "بند ہوا"}
-_UNREADABLE_DATE = {"en": "Deadline not in YYYY-MM-DD format", "ur": "آخری تاریخ درست شکل میں نہیں"}
-_MUST_BE_ENROLLED = {"en": "must be enrolled", "ur": "داخلہ ضروری ہے"}
-_MUST_NOT_BE_ENROLLED = {"en": "must not be enrolled", "ur": "داخلہ نہیں ہونا چاہیے"}
-_NO_OTHER_SCHOLARSHIP = {"en": "must not hold another scholarship", "ur": "کوئی اور اسکالرشپ نہیں ہونی چاہیے"}
-_NO_RESTRICTION = {"en": "no restriction", "ur": "کوئی پابندی نہیں"}
+_REQUIRED_WORD = {"en": "Required", "ur": "درکار", "ur_roman": "Zaroori"}
+_YOU_WORD = {"en": "You", "ur": "آپ", "ur_roman": "Aap"}
+_NOT_PROVIDED = {"en": "not provided", "ur": "فراہم نہیں کیا گیا", "ur_roman": "nahi diya gaya"}
+_AT_LEAST = {"en": "at least", "ur": "کم از کم", "ur_roman": "kam az kam"}
+_AT_MOST = {"en": "at most", "ur": "زیادہ سے زیادہ", "ur_roman": "zyada se zyada"}
+_BETWEEN = {"en": "between", "ur": "کے درمیان", "ur_roman": "darmiyan"}
+_AND = {"en": "and", "ur": "اور", "ur_roman": "aur"}
+_OPEN_UNTIL = {"en": "Open until", "ur": "کھلا ہے", "ur_roman": "Khula hai"}
+_CLOSED_ON = {"en": "Closed on", "ur": "بند ہوا", "ur_roman": "Band hua"}
+_UNREADABLE_DATE = {"en": "Deadline not in YYYY-MM-DD format", "ur": "آخری تاریخ درست شکل میں نہیں", "ur_roman": "Aakhri tareekh SAAL-MAHINA-DIN ki shakal mein nahi"}
+_MUST_BE_ENROLLED = {"en": "must be enrolled", "ur": "داخلہ ضروری ہے", "ur_roman": "zaroori hai ke enrolled hon"}
+_MUST_NOT_BE_ENROLLED = {"en": "must not be enrolled", "ur": "داخلہ نہیں ہونا چاہیے", "ur_roman": "enrolled nahi hona chahiye"}
+_NO_OTHER_SCHOLARSHIP = {"en": "must not hold another scholarship", "ur": "کوئی اور اسکالرشپ نہیں ہونی چاہیے", "ur_roman": "koi aur scholarship nahi honi chahiye"}
+_NO_RESTRICTION = {"en": "no restriction", "ur": "کوئی پابندی نہیں", "ur_roman": "koi pabandi nahi"}
 
 
 def _w(table: Dict[str, str], lang: str) -> str:

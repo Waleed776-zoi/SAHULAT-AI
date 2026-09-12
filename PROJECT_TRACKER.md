@@ -4,7 +4,7 @@
 Companion to `README.md` (which is the *setup* guide). This file is the *work* guide.
 
 - **Created:** 2026-09-10
-- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Interaction refinement pass: checklist fix, visible field states, motion. 55 items closed, 233 tests passing
+- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Interaction refinement pass: checklist fix, visible field states, motion. 60 items closed, 259 tests passing
 - **Baseline audited:** full read of all 10 source files, 5 data files, config, and a live environment verification run.
 
 ---
@@ -54,7 +54,7 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **233/233 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Unit tests | **259/259 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **3** opportunities: `hec_balochistan_fata_ug` (scholarship), `navttc_hunarmand_pakistan` (skills), `peef_punjab_undergraduate` (scholarship) |
 | Job records loaded | **0** — all `njp_jobs_sample.json` entries are `REPLACE ME` placeholders and are correctly skipped by the loader |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
@@ -127,6 +127,11 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | P1-6 | Information freshness from `last_verified` | `timeliness.py` | **P1** | **DONE** | — |
 | P1-7 | Explain Like I'm New — simplify, never reinterpret | `llm_client.py` + `app.py` | **P1** | **DONE** | — |
 | P1-8 | Source presentation: document, organisation, link, date | `app.py` | **P1** | **DONE** | — |
+| P2-1 | Roman Urdu as a third language mode | `i18n_roman.py` (new) | **P2** | **DONE** | — |
+| P2-2 | Impact figures — counted work plus one labelled estimate | `impact.py` (new) | **P2** | **DONE** | — |
+| P2-3 | Visual polish: Urdu leading, card hierarchy, spacing | `styles/` + `app.py` | **P2** | **DONE** | — |
+| P2-4 | Empty states that offer a way out | `app.py` | **P2** | **DONE** | — |
+| P2-5 | A degraded AI answer is distinguishable from a real one | `llm_client.py` + `app.py` | **P2** | **DONE** | — |
 | UX-07 | Document checklist count/bar lagged one interaction behind | `app.py` | **P0** | **DONE** | — |
 | UX-08 | Form fields had no visible boundary until clicked | `styles/` | **P0** | **DONE** | — |
 | UX-09 | No motion system; header was not a distinct layer | `styles/` + `app.py` | **P1** | **DONE** | — |
@@ -439,6 +444,127 @@ ceiling into structured fields.
 - [x] Model name confirmed against the live API.
 - [x] A real text generation succeeds, in both languages.
 - [x] A real image extraction succeeds.
+
+---
+
+### V2 — P2 upgrade (branch `v2`)
+
+Implements `Sahulat_AI_V2_P2_Secondary_Priority.md`.
+
+**Sequencing note:** P2-1 was done *last* deliberately. Roman Urdu is a
+445-string translation, and P2-2/4/5 each added strings — translating before
+they landed would have meant translating twice and leaving gaps behind.
+
+---
+
+#### P2-1 — Roman Urdu
+**Area:** `core/i18n_roman.py` (new), `core/i18n.py`, `app.py` · **Status:** **DONE**
+
+A third language mode: **English · اردو · Roman**, at **100% string coverage**
+(445 of 445), not a partial mode that falls back to English mid-page.
+
+**Kept in its own table**, not as a third key in every literal. That keeps the
+English/Urdu pairs - the two languages the product actually promises -
+readable side by side, and means a gap degrades to English rather than
+breaking a page. `t()` consults it only for `ur_roman`.
+
+**Roman Urdu is Latin script, so it is left-to-right.** Treating it as "the
+other Urdu one" and mirroring the page would have been the obvious mistake;
+`is_rtl()` exists so that decision is made in one place. It also takes the
+Latin font stack and Latin leading rather than Naskh.
+
+**Written as people actually type**, borrowing English for terms with no
+everyday Urdu equivalent - "scholarship", "documents", "deadline". Forcing
+literary Urdu into Latin script would read as stilted to exactly the audience
+this mode is for.
+
+**The model is told explicitly** not to answer in Urdu script: asked for
+"Urdu", it returns Urdu script, which is precisely what a Roman Urdu reader
+chose not to have.
+
+Tests: full coverage, no orphan keys, **placeholder parity on every string**
+(a dropped `{n}` is a render-time crash, not a typo), no Urdu script anywhere
+in the Roman table, and a whole-page render asserting no Urdu script leaks in.
+
+---
+
+#### P2-2 — Impact figures
+**Area:** `core/impact.py` (new), `app.py` · **Status:** **DONE**
+
+Four figures: opportunities screened, requirements checked, documents
+identified, and estimated minutes saved.
+
+**Three are counts of work this session actually did.** Requirements counted
+are `applicable_checks()`, so a record with two rules contributes two and not
+fourteen - the inflation would have been invisible and the number is the
+headline.
+
+**The fourth is the only estimate, and it is fenced off.** It comes from a
+single visible constant, `MINUTES_PER_LOOKUP = 8`, exposed through
+`estimate_basis()` so the UI prints the arithmetic: *"3 opportunities × 8
+minutes assumed per manual lookup. Prototype estimate — not a measured
+population-level claim."* It carries an "Estimate" badge; the counted figures
+do not.
+
+The brief asks for these "for presentations". That is exactly where an
+unlabelled invented number does the most damage: a judge who finds the basis
+was never stated stops believing the figures that *were* counted.
+
+---
+
+#### P2-3 — Visual polish
+**Area:** `styles/`, `app.py` · **Status:** **DONE**
+
+- **Urdu leading fixed.** Naskh stacks marks above and below the baseline, so
+  Latin leading makes consecutive Urdu lines collide. Body line-height is now
+  a token: 1.6 Latin, 1.95 Urdu.
+- **Result detail grouped into four tabs** — Eligibility · Documents & steps ·
+  Source · Understand & ask. Eight sections had accumulated in one scroll;
+  they group by the question being asked, not by implementation.
+- **Spacing**: `style="height:1rem"` spacer hacks replaced with named
+  `.sa-spacer` classes, so vertical rhythm is not set inline.
+- Badge tones audited: every tone used in `app.py` has a definition.
+
+---
+
+#### P2-4 — Empty states
+**Area:** `app.py` · **Status:** **DONE**
+
+"No matches" now comes with three routes out - change answers, change
+categories, upload an ad - and, importantly, with the sentence *"Our catalogue
+currently holds 3 records. A small catalogue is a limit of this prototype, not
+a judgement about you."* A bare "no matches" invites the reading that the user
+qualifies for nothing, when the likelier explanation is ours.
+
+Two more absences made explicit:
+- **No documents ticked** → says so, rather than showing 0% with no
+  explanation.
+- **No documents listed on the record** → *"that is a gap in our record, not a
+  sign that none are needed"*. Silence next to an empty list would read as
+  permission to turn up empty-handed.
+
+---
+
+#### P2-5 — Degraded AI
+**Area:** `core/llm_client.py`, `app.py` · **Status:** **DONE**
+
+**The real problem was that a failure looked like an answer.** `explain_match`
+returned a plain string either way, so the sentence printed when a call failed
+rendered in the same blue box, with the same authority, as a real explanation.
+
+`AiText` is a `str` subclass carrying `.ok` and `.reason`. Subclassing `str`
+was deliberate: every existing caller keeps working unchanged, so this is
+additive rather than a migration. Three non-answers are distinguished - no key,
+call failed, no grounded evidence - and each is presented differently.
+
+A raw API error never reaches the screen: *"Gemini API error 429"* tells a
+scholarship applicant nothing they can act on. The message names what is **not**
+affected instead, and a test asserts the exception text never appears.
+
+The architectural claim - that the product works without the model - is now
+tested rather than asserted: with `_generate` raising, the results page still
+renders the scorecard, the next step, the source block and the deterministic
+result.
 
 ---
 
@@ -1603,6 +1729,10 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-12 | **P2-1** — Roman Urdu ships at 100% coverage or not at all | A partially translated mode switches script mid-page, which is worse than not offering it. A coverage test is what makes the mode safe to ship and safe to extend | Claude |
+| 2026-09-12 | **P2-1** — Roman Urdu is left-to-right | It is Urdu language in Latin script. Mirroring the page because it is "the Urdu one" would be a plausible and wrong shortcut; `is_rtl()` keeps that decision in one place | Claude |
+| 2026-09-12 | **P2-2** — one constant behind the time estimate, printed in the UI | The figure cannot be counted, only assumed. Naming the assumption is what keeps the three counted figures credible in the room where it matters | Claude |
+| 2026-09-12 | **P2-5** — `AiText` subclasses `str` rather than replacing it | The UI needs to know whether it got an answer or a notice; string-sniffing is not a way to know that. Subclassing keeps every existing call site working | Claude |
 | 2026-09-12 | **P1-1** — a readiness percentage IS shown, unlike a match score | Every term is something the user ticked or the record lists, and it is computed from the rows displayed beneath it. A match score would be a guess at an awarding body's decision; this is arithmetic over a checklist | Claude |
 | 2026-09-12 | **P1-2** — "no deadline on record" is a fifth state, not "plenty of time" | Every curated record currently has a null deadline, so this is the state users meet most often. Folding it into the benign band would turn missing data into reassurance across the whole catalogue | Claude |
 | 2026-09-12 | **P1-5** — the comparison names no winner when the numbers are close | Below a set margin it returns no leader. Manufacturing one turns a comparison into a recommendation, and "less effort" is not "better" | Claude |
@@ -1651,6 +1781,8 @@ Append one line per completed piece of work.
 | 2026-09-11 | PERF-01..04 | Lazy + `@st.cache_resource` retrieval, offline model loading, opt-in semantic search, `.streamlit/config.toml`. **First render measured at 1.07s** (was ~30-35s), with no heavy modules imported at page load. |
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
+| 2026-09-12 | **V2 P2** | Branch `v2`: Roman Urdu (third language, 445/445 strings), impact figures, visual polish incl. result-detail tabs and Urdu leading, empty states with routes out, and degraded-AI handling via `AiText`. New modules `core/i18n_roman.py`, `core/impact.py`. |
+| 2026-09-12 | TEST-01 | Suite grown 233 → **259 tests** (new `tests/test_p2_features.py`). |
 | 2026-09-12 | **V2 P1** | Branch `v2`: application readiness, deadline intelligence, scoped contextual Q&A, opportunity passport, comparison, freshness, plain-language explainer, source presentation. New modules `core/readiness.py`, `core/timeliness.py`, `core/comparison.py`. |
 | 2026-09-12 | TEST-01 | Suite grown 195 → **233 tests** (new `tests/test_p1_features.py`). |
 | 2026-09-11 | **V2 P0** | Branch `v2`: eligibility scorecard, why/why-not explanations, deterministic top matches, Lens schema + correction, trust tests, next best action, architecture showcase, landing paths. New module `core/next_action.py`. |

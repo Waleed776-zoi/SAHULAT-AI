@@ -38,13 +38,13 @@ from core.i18n import (
     describe_ranking_reason, describe_requirements, describe_urgency,
     education_label,
     english_label, field_of_study_label, gender_label, join_list,
-    priority_group_label, profile_field_label, scorecard_row,
-    status_label, t,
+    LANGUAGE_NAMES, LANGUAGES, is_rtl, priority_group_label,
+    profile_field_label, scorecard_row, status_label, t,
     validation_message,
 )
 from core.llm_client import (
-    SIMPLIFY_SECTIONS, answer_followup, explain_match, is_ai_available,
-    simplify_opportunity,
+    REASON_NO_EVIDENCE, REASON_OFFLINE, SIMPLIFY_SECTIONS, answer_followup,
+    explain_match, is_ai_available, simplify_opportunity,
 )
 from core.models import (
     COMPUTER_LEVELS, EDUCATION_LEVELS, ENGLISH_LEVELS, FIELDS_OF_STUDY, GENDERS,
@@ -53,6 +53,7 @@ from core.models import (
     sample_profile,
 )
 from core.comparison import compare
+from core.impact import estimate_basis, measure
 from core.next_action import (
     ACTION_ANSWER_MISSING, is_actionable_now, next_action,
 )
@@ -143,12 +144,16 @@ def inject_css(lang: str) -> None:
     static styling lives in styles/*.css (spec 17.1) so it is readable and
     reviewable instead of buried in a Python f-string.
     """
-    urdu = lang == "ur"
+    # Roman Urdu is Urdu *language* in Latin *script*: it takes the Latin font
+    # stack, Latin leading and left-to-right layout. Treating it as "the Urdu
+    # one" and mirroring the page would be the obvious, wrong, shortcut.
+    urdu = is_rtl(lang)
     body_font = ("'Noto Naskh Arabic','Inter',system-ui,sans-serif" if urdu
                  else "'Inter',system-ui,-apple-system,sans-serif")
     display_font = ("'Noto Nastaliq Urdu','Noto Naskh Arabic',serif" if urdu
                     else "'Source Serif 4',Georgia,serif")
     display_lh = "2.0" if urdu else "1.12"
+    body_lh = "1.95" if urdu else "1.6"
 
     rtl = """
       .stMain .block-container { direction: rtl; text-align: right; }
@@ -163,7 +168,8 @@ def inject_css(lang: str) -> None:
         f"<style>{FONT_IMPORT}\n"
         f":root {{ --sa-font-body: {body_font};"
         f" --sa-font-display: {display_font};"
-        f" --sa-display-lh: {display_lh}; }}\n"
+        f" --sa-display-lh: {display_lh};"
+        f" --sa-body-lh: {body_lh}; }}\n"
         f"{load_stylesheets()}\n{rtl}</style>",
         unsafe_allow_html=True,
     )
@@ -458,17 +464,19 @@ def render_header() -> None:
 
 render_header()
 
-_, lang_en_col, lang_ur_col, cta_col = st.columns([4, 1, 1, 2])
-with lang_en_col:
-    if st.button("EN", key="lang_en", use_container_width=True,
-                 type="primary" if lang == "en" else "secondary"):
-        st.session_state.language = "en"
-        st.rerun()
-with lang_ur_col:
-    if st.button("اردو", key="lang_ur", use_container_width=True,
-                 type="primary" if lang == "ur" else "secondary"):
-        st.session_state.language = "ur"
-        st.rerun()
+# Three language modes (P2-1). Each button is labelled in its own mode, so a
+# reader who cannot read the other two can still find theirs.
+LANGUAGE_BUTTONS = {"en": "EN", "ur": "اردو", "ur_roman": "Roman"}
+
+_, lang_col_a, lang_col_b, lang_col_c, cta_col = st.columns([3, 1, 1, 1, 2])
+for column, code in zip((lang_col_a, lang_col_b, lang_col_c), LANGUAGES):
+    with column:
+        if st.button(LANGUAGE_BUTTONS[code], key=f"lang_{code}",
+                     use_container_width=True,
+                     help=LANGUAGE_NAMES[code],
+                     type="primary" if lang == code else "secondary"):
+            st.session_state.language = code
+            st.rerun()
 with cta_col:
     if st.session_state.view == "home":
         if st.button(t("cta_start", lang), key="header_cta",
@@ -627,7 +635,7 @@ def render_home() -> None:
             st.markdown(f'<div class="sa-stat-num">{health["total"]}</div>'
                         f'<div class="sa-stat-label">{t("catalogue_stat", lang)}</div>',
                         unsafe_allow_html=True)
-            st.markdown(f'<div style="height:1rem"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="sa-spacer"></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="sa-stat-num">{sourced}</div>'
                         f'<div class="sa-stat-label">{t("sourced_stat", lang)}</div>',
                         unsafe_allow_html=True)
@@ -635,7 +643,7 @@ def render_home() -> None:
             st.markdown(f'<div class="sa-stat-num">{providers}</div>'
                         f'<div class="sa-stat-label">{t("authorities_stat", lang)}</div>',
                         unsafe_allow_html=True)
-            st.markdown(f'<div style="height:1rem"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="sa-spacer"></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="sa-stat-num">0</div>'
                         f'<div class="sa-stat-label">{t("identifiers_stat", lang)}</div>',
                         unsafe_allow_html=True)
@@ -871,6 +879,35 @@ def answer_value(profile: UserProfile, field_name: str) -> str:
 
 
 RESULT_PILL = {MET: "pill-good", UNMET: "pill-no", UNKNOWN: "pill-verify"}
+
+
+def render_ai_text(result, key_prefix: str = "") -> None:
+    """
+    Show a model answer, or say plainly why there isn't one (P2-5).
+
+    An answer and a failure notice used to render identically - same blue box,
+    same weight - so a user could not tell which they were reading. They are
+    now visually different, and the notice names what is *not* affected, since
+    the eligibility result never depended on the model in the first place.
+
+    A raw API error is never shown. "Gemini API error 429" tells a scholarship
+    applicant nothing they can act on.
+    """
+    if result is None:
+        return
+    if getattr(result, "ok", True):
+        st.info(str(result))
+        return
+
+    reason = getattr(result, "reason", "")
+    if reason == REASON_NO_EVIDENCE:
+        callout(str(result), title=t("no_evidence_heading", lang), tone="verify")
+    elif reason == REASON_OFFLINE:
+        callout(t("ai_mock_explainer", lang), title=t("ai_offline_heading", lang),
+                tone="info")
+    else:
+        callout(t("ai_unavailable_body", lang),
+                title=t("ai_unavailable_heading", lang), tone="verify")
 
 
 def render_scorecard(match) -> None:
@@ -1172,8 +1209,10 @@ def render_contextual_followup(match) -> None:
                 st.rerun()
 
     answer = st.session_state.get(state_key)
-    if answer:
-        st.info(answer)
+    if not answer:
+        st.caption(t("answer_empty_hint", lang))
+    else:
+        render_ai_text(answer)
         if opportunity.official_url:
             st.markdown(f'<a class="sa-source-link" href="{opportunity.official_url}"'
                         f' target="_blank" rel="noopener">{t("open_official_site", lang)}'
@@ -1260,6 +1299,72 @@ def render_comparison(results) -> None:
 
     callout(describe_comparison(comparison, lang))
     st.caption(t("compare_effort_caveat", lang))
+
+
+def render_impact(results) -> None:
+    """
+    What this session actually did (P2-2).
+
+    Three of the four figures are counts of real work. The fourth is an
+    estimate, and it is the only one carrying a badge, a stated basis and the
+    arithmetic that produced it - because this panel exists to be shown to
+    judges, and an unlabelled invented number would cost the counted ones
+    their credibility.
+    """
+    impact = measure(results)
+    if impact.is_empty():
+        return
+
+    basis = estimate_basis()
+    section_label(t("impact_heading", lang))
+
+    figures = [
+        (impact.opportunities_screened, t("impact_screened", lang), ""),
+        (impact.requirements_checked, t("impact_requirements", lang), ""),
+        (impact.documents_identified, t("impact_documents", lang), ""),
+        (f"~{impact.estimated_minutes_saved}", t("impact_minutes", lang),
+         badge(t("impact_estimate_badge", lang), "tone-verify")),
+    ]
+    for column, (value, label, mark) in zip(st.columns(4), figures):
+        with column:
+            st.markdown(
+                f'<div class="sa-impact">'
+                f'<div class="sa-stat-num">{value}</div>'
+                f'<div class="sa-stat-label">{label}</div>'
+                f'<div class="sa-impact-mark">{mark}</div></div>',
+                unsafe_allow_html=True)
+
+    st.caption(t("impact_counted_note", lang))
+    st.caption(t("impact_estimate_note", lang,
+                 n=impact.opportunities_screened,
+                 minutes=basis["minutes_per_lookup"]))
+
+
+def render_empty_state(key_suffix: str = "") -> None:
+    """
+    An empty result with routes out of it (P2-4).
+
+    A blank "no matches" is a dead end, and it also invites the wrong reading:
+    that the user does not qualify for anything. The likelier explanation is
+    that our catalogue is three records long, so say that too.
+    """
+    callout(t("empty_body", lang), title=t("empty_heading", lang), tone="verify")
+    st.markdown(f"**{t('empty_try_heading', lang)}**")
+
+    answers_col, categories_col, upload_col = st.columns(3)
+    with answers_col:
+        if st.button(t("empty_try_answers", lang), key=f"empty_answers{key_suffix}",
+                     use_container_width=True):
+            go_to(1)
+    with categories_col:
+        if st.button(t("empty_try_categories", lang), key=f"empty_categories{key_suffix}",
+                     use_container_width=True):
+            go_to(0)
+    with upload_col:
+        st.button(t("empty_try_upload", lang), key=f"empty_upload{key_suffix}",
+                  use_container_width=True, disabled=True,
+                  help=t("home_upload_hint", lang))
+    st.caption(t("empty_catalogue_note", lang, n=health["total"]))
 
 
 def render_top_matches(results) -> None:
@@ -1374,10 +1479,13 @@ def render_documents(opportunity) -> None:
     every term is something the user ticked or the record lists, and it is
     computed from the very rows shown beneath it.
     """
+    st.markdown(f"**{t('readiness_heading', lang)}**")
     if not opportunity.required_documents:
+        # "No documents listed" is a gap in our record, not permission to
+        # turn up empty-handed. Saying nothing would imply the latter.
+        st.caption(t("documents_none_listed", lang))
         return
 
-    st.markdown(f"**{t('readiness_heading', lang)}**")
     summary_slot = st.container()          # filled in below, once we know the count
 
     previously_ready = st.session_state.documents_ready.get(
@@ -1399,6 +1507,8 @@ def render_documents(opportunity) -> None:
             f'</div>', unsafe_allow_html=True)
         st.progress(state.percent / 100)
 
+    if not state.have:
+        st.caption(t("documents_none_marked", lang))
     if state.missing:
         st.markdown(f'<div class="sa-ready-label">{t("documents_still_needed", lang)}</div>'
                     '<div class="sa-unstated">'
@@ -1681,40 +1791,44 @@ def render_match_card(match, rank: int = 0, highlight: bool = False,
         render_next_action(match)
 
         with st.expander(t("view_eligibility", lang), expanded=highlight):
-            render_scorecard(match)
-            rule()
-            render_reasons(match)
-            quota_note = opportunity.eligibility_conditions.special_quota_note
-            if quota_note:
-                callout(quota_note, title=t("quota_note_label", lang), tone="info")
+            # P2-3: eight sections stacked in one scroll was the clutter. They
+            # group naturally by the question being asked - am I eligible,
+            # what do I need, who says so, help me understand - so the tabs
+            # follow the questions rather than the implementation.
+            eligibility_tab, documents_tab, source_tab, ask_tab = st.tabs([
+                t("tab_eligibility", lang), t("tab_documents", lang),
+                t("tab_source", lang), t("tab_ask", lang)])
 
-            rule()
-            doc_col, time_col = st.columns(2, gap="large")
-            with doc_col:
+            with eligibility_tab:
+                render_scorecard(match)
+                rule()
+                render_reasons(match)
+                quota_note = opportunity.eligibility_conditions.special_quota_note
+                if quota_note:
+                    callout(quota_note, title=t("quota_note_label", lang), tone="info")
+
+            with documents_tab:
                 render_documents(opportunity)
-            with time_col:
+                rule()
                 render_timeline(opportunity)
 
-            rule()
-            render_source_card(opportunity)
+            with source_tab:
+                render_source_card(opportunity)
+                if opportunity.disclaimer:
+                    st.caption(opportunity.disclaimer)
 
-            rule()
-            render_plain_language(opportunity)
-
-            rule()
-            render_contextual_followup(match)
-
-            if opportunity.disclaimer:
-                st.caption(opportunity.disclaimer)
-
-            explain_key = f"explain_{opportunity.opportunity_id}"
-            if st.button(t("ai_explain_button", lang), key=f"btn_{explain_key}"):
-                with st.spinner(""):
-                    st.session_state.explanations[explain_key] = explain_match(
-                        describe_profile(current_profile(), lang),
-                        build_result_summary(match), lang)
-            if explain_key in st.session_state.explanations:
-                st.info(st.session_state.explanations[explain_key])
+            with ask_tab:
+                render_plain_language(opportunity)
+                rule()
+                render_contextual_followup(match)
+                rule()
+                explain_key = f"explain_{opportunity.opportunity_id}"
+                if st.button(t("ai_explain_button", lang), key=f"btn_{explain_key}"):
+                    with st.spinner(""):
+                        st.session_state.explanations[explain_key] = explain_match(
+                            describe_profile(current_profile(), lang),
+                            build_result_summary(match), lang)
+                render_ai_text(st.session_state.explanations.get(explain_key))
     if animation:
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1784,10 +1898,7 @@ def render_followup() -> None:
         with st.spinner(""):
             evidence = get_rag_index().retrieve(question, top_k=3)
             answer = answer_followup(question, evidence, lang)
-        if evidence:
-            st.info(answer)
-        else:
-            callout(answer, tone="verify")
+        render_ai_text(answer)
 
 
 def render_results() -> None:
@@ -1797,8 +1908,7 @@ def render_results() -> None:
 
     if not filtered:
         section_title(t("empty_heading", lang), t("empty_body", lang))
-        if st.button(t("nav_edit_answers", lang), key="back_from_empty", type="primary"):
-            go_to(0)
+        render_empty_state(key_suffix="_none")
         return
 
     results = evaluate_all(profile, filtered)
@@ -1828,7 +1938,7 @@ def render_results() -> None:
 
     strong = [r for r in results if r.overall_status == STATUS_ELIGIBLE]
     if not strong:
-        callout(t("empty_body", lang), title=t("empty_heading", lang), tone="verify")
+        render_empty_state()
 
     rank = 0
     for status, note_key in ((STATUS_ELIGIBLE, "group_eligible_help"),
@@ -1846,6 +1956,9 @@ def render_results() -> None:
                 match, rank=rank,
                 highlight=(rank == 1 and status == STATUS_ELIGIBLE),
                 animation=reveal(f"{token}:card", rank))
+
+    rule()
+    render_impact(results)
 
     rule()
     render_comparison(results)
