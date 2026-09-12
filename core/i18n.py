@@ -253,6 +253,35 @@ STRINGS: Dict[str, Dict[str, str]] = {
     "stage_structure": {"en": "Structuring what it says", "ur": "معلومات کو ترتیب دیا جا رہا ہے"},
     "stage_screen": {"en": "Checking it against your answers",
                      "ur": "آپ کے جوابات سے جانچا جا رہا ہے"},
+    # -- staged progress for the AI calls (V3) --
+    "stage_ask_understand": {"en": "Understanding your question",
+                             "ur": "آپ کا سوال سمجھا جا رہا ہے"},
+    "stage_ask_search": {"en": "Searching the records we hold",
+                         "ur": "ہمارے پاس موجود اندراجات میں تلاش جاری ہے"},
+    "stage_ask_gather": {"en": "Gathering the closest matches",
+                         "ur": "قریب ترین اندراجات جمع کیے جا رہے ہیں"},
+    "stage_ask_write": {"en": "Writing the answer, with its sources",
+                        "ur": "جواب لکھا جا رہا ہے، حوالوں کے ساتھ"},
+    "stage_explain_profile": {"en": "Reading your answers",
+                              "ur": "آپ کے جوابات پڑھے جا رہے ہیں"},
+    "stage_explain_decision": {"en": "Reading the rules engine's decision",
+                               "ur": "قواعد کے انجن کا فیصلہ پڑھا جا رہا ہے"},
+    "stage_explain_write": {"en": "Putting it in plain words",
+                            "ur": "اسے آسان الفاظ میں بیان کیا جا رہا ہے"},
+    "stage_simplify_read": {"en": "Reading the official wording",
+                            "ur": "سرکاری عبارت پڑھی جا رہی ہے"},
+    "stage_simplify_write": {"en": "Rewriting it simply",
+                             "ur": "اسے آسان زبان میں دوبارہ لکھا جا رہا ہے"},
+    "stage_running_note_ai": {
+        "en": "This runs on Google's servers and takes a few seconds. Nothing you type "
+              "is stored, and the answer can only use the records shown on this page.",
+        "ur": "یہ عمل گوگل کے سرورز پر ہوتا ہے اور چند سیکنڈ لیتا ہے۔ آپ کا لکھا ہوا محفوظ نہیں کیا جاتا، "
+              "اور جواب صرف اسی صفحے پر دکھائے گئے اندراجات سے بن سکتا ہے۔"},
+    "stage_running_note_local": {
+        "en": "Working from the records on this page. No AI key is configured, so the "
+              "wording below is a stand-in.",
+        "ur": "اسی صفحے کے اندراجات سے کام کیا جا رہا ہے۔ کوئی AI کلید موجود نہیں، اس لیے نیچے کی "
+              "عبارت عارضی ہے۔"},
     "stage_running_note": {
         "en": "Reading happens on Google's servers and takes a few seconds. Your file is not stored.",
         "ur": "پڑھنے کا عمل گوگل کے سرورز پر ہوتا ہے اور چند سیکنڈ لیتا ہے۔ آپ کی فائل محفوظ نہیں کی جاتی۔"},

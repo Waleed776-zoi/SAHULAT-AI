@@ -1256,9 +1256,11 @@ def render_plain_language(opportunity) -> None:
     """
     key = f"eli5_{opportunity.opportunity_id}"
     if st.button(t("eli5_button", lang), key=f"btn_{key}"):
-        with st.spinner(""):
-            st.session_state.simplified[key] = simplify_opportunity(
-                opportunity_facts(opportunity), lang)
+        with ai_stages("stage_simplify_read", "stage_simplify_write") as stages:
+            facts = opportunity_facts(opportunity)
+            stages.advance()
+
+            st.session_state.simplified[key] = simplify_opportunity(facts, lang)
 
     result = st.session_state.simplified.get(key)
     if not result:
@@ -1323,9 +1325,15 @@ def render_contextual_followup(match) -> None:
         with column:
             if st.button(t(chip, lang), key=f"{chip}_{opportunity.opportunity_id}",
                          use_container_width=True):
-                evidence = get_rag_index().retrieve_for(
-                    opportunity.opportunity_id, t(chip, lang))
-                with st.spinner(""):
+                with ai_stages("stage_ask_search", "stage_ask_gather",
+                               "stage_ask_write") as stages:
+                    evidence = get_rag_index().retrieve_for(
+                        opportunity.opportunity_id, t(chip, lang))
+                    stages.advance()
+
+                    evidence = list(evidence)
+                    stages.advance()
+
                     st.session_state[state_key] = answer_followup(
                         t(chip, lang), evidence, lang)
                 st.rerun()
@@ -1705,6 +1713,56 @@ def stage_markup(labels, active: int, note: str = "") -> str:
     return f'<div class="sa-stages">{"".join(rows)}{footer}</div>'
 
 
+class Stages:
+    """
+    A staged progress panel bound to one slot.
+
+    `advance()` is called only where real work has genuinely finished, which
+    is the whole design: there is no timer, no thread and no interpolation
+    anywhere in this class, so the panel cannot claim progress that has not
+    happened (V3 spec 42 - do not fabricate progress).
+
+    Used as a context manager so the slot is always cleared, including when
+    the model call raises.
+    """
+
+    def __init__(self, labels, note: str = ""):
+        self.labels = [l for l in labels if l]
+        self.note = note
+        self.slot = st.empty()
+        self.index = 0
+        self._paint()
+
+    def _paint(self) -> None:
+        self.slot.markdown(stage_markup(self.labels, self.index, self.note),
+                           unsafe_allow_html=True)
+
+    def advance(self) -> None:
+        """One real step finished; the next is now running."""
+        if self.index < len(self.labels) - 1:
+            self.index += 1
+            self._paint()
+
+    def __enter__(self) -> "Stages":
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        self.slot.empty()
+        return False
+
+
+def ai_stages(*label_keys) -> Stages:
+    """
+    A progress panel for a model call, labelled in the current language.
+
+    The footnote is chosen rather than fixed: "your file is not stored" is the
+    upload flow's promise and there is no file here, and promising a remote
+    call when no key is configured would describe work that is not happening.
+    """
+    note = "stage_running_note_ai" if is_ai_available() else "stage_running_note_local"
+    return Stages([t(key, lang) for key in label_keys], t(note, lang))
+
+
 def read_ad_in_stages(file_bytes: bytes, mime_type: str, screenable: bool):
     """
     Run the upload pipeline, showing each step as it actually happens.
@@ -1987,10 +2045,16 @@ def render_supporting_detail(match) -> None:
         rule()
         explain_key = f"explain_{opportunity.opportunity_id}"
         if st.button(t("ai_explain_button", lang), key=f"btn_{explain_key}"):
-            with st.spinner(""):
+            with ai_stages("stage_explain_profile", "stage_explain_decision",
+                           "stage_explain_write") as stages:
+                profile_summary = describe_profile(current_profile(), lang)
+                stages.advance()
+
+                result_summary = build_result_summary(match)
+                stages.advance()
+
                 st.session_state.explanations[explain_key] = explain_match(
-                    describe_profile(current_profile(), lang),
-                    build_result_summary(match), lang)
+                    profile_summary, result_summary, lang)
         render_ai_text(st.session_state.explanations.get(explain_key))
 
 
@@ -2056,8 +2120,20 @@ def render_followup() -> None:
                              placeholder=t("ask_placeholder", lang),
                              label_visibility="collapsed", key="followup_question")
     if st.button(t("ask_button", lang), key="ask_btn", type="primary") and question.strip():
-        with st.spinner(""):
-            evidence = get_rag_index().retrieve(question, top_k=3)
+        # Four stages because there are four real boundaries: the index has to
+        # exist, the search has to run, the passages have to be gathered, and
+        # only then does the model get asked. The last one is the slow one.
+        with ai_stages("stage_ask_understand", "stage_ask_search",
+                       "stage_ask_gather", "stage_ask_write") as stages:
+            index = get_rag_index()
+            stages.advance()
+
+            evidence = index.retrieve(question, top_k=3)
+            stages.advance()
+
+            evidence = list(evidence)
+            stages.advance()
+
             answer = answer_followup(question, evidence, lang)
         render_ai_text(answer)
 

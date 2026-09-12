@@ -54,7 +54,7 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **335/335 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Unit tests | **351/351 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **30** opportunities: 2 scholarship, 10 job, 8 skills, 10 assistance. **No category is empty.** |
 | Job records loaded | **10** — `government_jobs.json`, curated 2026-09-12, all marked verified. Every record carries a future provisional deadline |
 | Assistance records loaded | **10** — `public_assistance.json`, curated 2026-09-12. All continuous-enrolment; two are gated on `required_groups` |
@@ -113,6 +113,7 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | UI-01 | `st.tabs` was the product architecture (V3 spec 45.3) | `app.py` | **P0** | **DONE** | — |
 | UI-02 | The eligibility verdict sat inside an expander (V3 spec 20) | `app.py` | **P0** | **DONE** | — |
 | UI-03 | The hero decorated rather than demonstrated (V3 spec 13.2) | `app.py` | **P0** | **DONE** | — |
+| UI-04 | Every AI call but the Lens showed a wordless spinner | `app.py` | **P1** | **DONE** | — |
 | BUG-03 | Zero income / zero marks silently become "not provided" | `app.py` | **P1** | **DONE** | — |
 | BUG-04 | Expired deadline reported as user ineligibility | `rules_engine.py` | **P1** | **DONE** | — |
 | I18N-01 | `name_ur` / `summary_ur` exist in data but are never displayed | `app.py` | **P1** | **DONE** | — |
@@ -492,6 +493,41 @@ keep the **Provisional date** badge beside the countdown.
 - [x] 10 records, loading, screening, and rendering in all three languages.
 - [x] Every deadline a future date and flagged provisional (DATA-06).
 - [x] 30 new guard tests; suite 261 → 292.
+
+---
+
+#### UI-04 — A wordless spinner on every AI call but one
+**Area:** `app.py`, `core/i18n.py` · **Priority:** P1 · **Status:** **DONE** · **Spec:** V3 §42
+
+The Lens showed real stages. The other four model calls — the follow-up Ask,
+the per-opportunity chips, "explain this match" and the plain-language rewrite
+— showed `st.spinner("")`: a grey ring with no text, for a call that takes
+several seconds against a remote model. A user cannot tell that apart from a
+hang.
+
+All four now use the same staged panel, driven by a small `Stages` context
+manager. Pending steps stay on screen dimmed and blurred, so a step that
+finishes instantly is readable rather than a label flashing past.
+
+**The constraint is unchanged from the Lens work, and is why there is no timer
+anywhere in it:** the panel advances at real step boundaries only. The Ask flow
+gets four stages because it has four real boundaries — the index has to exist,
+the search has to run, the passages have to be gathered, and only then is the
+model asked. Nothing is padded to look slower. A test asserts `time.sleep` and
+friends appear nowhere near this code, because the moment one does the panel
+has stopped reporting work and started performing it.
+
+**The footnote had to become conditional.** The Lens note reads "your file is
+not stored" — there is no file in a follow-up question, and reusing that line
+would promise something about a thing that never existed. There is now a note
+for the AI flows, and a third for when no key is configured, since promising
+"this runs on Google's servers" with nothing configured describes work that is
+not happening.
+
+- [x] No `st.spinner("")` left in the app; a test guards it.
+- [x] Four stages on Ask, three on explain, two on simplify — all real.
+- [x] Labels in English, Urdu and Roman Urdu; none claims a percentage or a time.
+- [x] The panel clears even when the model call raises.
 
 ---
 
@@ -2133,6 +2169,7 @@ Append one line per completed piece of work.
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
 | 2026-09-12 | **DATA-02** | **Closed.** Waleed verified the eligibility figures and curated 7 more NAVTTC course records: catalogue 3 → **10, all verified**. Metadata (dates, confidence, disclaimers) completed; three `source_date` values were invalid (two in the future, one still `TODO-VERIFY`). |
+| 2026-09-12 | **UI-04** | Staged progress on all four remaining AI calls, replacing wordless spinners. Four labelled steps on the follow-up Ask, with pending steps dimmed and blurred. Suite 335 → **351**. |
 | 2026-09-12 | **UI-01/02/03** | **V3 visual spec, structural pass.** Top-level tabs replaced by stateful screens with real header navigation; featured match shows its verdict inline; hero renders a real screening result instead of a decorative SVG. First render 1.16s → **1.05s**. |
 | 2026-09-12 | TEST-04 | `tests/test_v3_visual.py` (17 tests), including an assertion that the hero preview is a real catalogue record and the engine's actual top match. Suite 318 → **335**. |
 | 2026-09-12 | **DATA-07** | **Public Assistance filled — no category is empty.** 10 records in `public_assistance.json` (BISP ×3, Bait-ul-Mal ×2, Himmat Card, Zakat Guzara, Sehat Sahulat, interest-free loan, EOBI). Catalogue 20 → **30**. Assistance got its own landing path. |

@@ -146,6 +146,21 @@ ROMAN: Dict[str, str] = {
     "stage_read": "Dastavez ko AI se parha ja raha hai",
     "stage_structure": "Maloomat ko tarteeb diya ja raha hai",
     "stage_screen": "Aap ke jawabat se jaancha ja raha hai",
+    # -- staged progress for the AI calls --
+    "stage_ask_understand": "Aap ka sawal samjha ja raha hai",
+    "stage_ask_search": "Hamare paas mojood indiraaj mein talaash jari hai",
+    "stage_ask_gather": "Qareeb tareen indiraaj jama kiye ja rahe hain",
+    "stage_ask_write": "Jawab likha ja raha hai, hawalon ke saath",
+    "stage_explain_profile": "Aap ke jawabat parhe ja rahe hain",
+    "stage_explain_decision": "Qawaid ke engine ka faisla parha ja raha hai",
+    "stage_explain_write": "Ise aasan alfaaz mein bayan kiya ja raha hai",
+    "stage_simplify_read": "Sarkari ibarat parhi ja rahi hai",
+    "stage_simplify_write": "Ise aasan zaban mein dobara likha ja raha hai",
+    "stage_running_note_ai": "Yeh amal Google ke servers par hota hai aur chand second leta hai. "
+                             "Aap ka likha hua mehfooz nahi kiya jata, aur jawab sirf isi safhe par "
+                             "dikhaye gaye indiraaj se ban sakta hai.",
+    "stage_running_note_local": "Isi safhe ke indiraaj se kaam kiya ja raha hai. Koi AI key mojood "
+                                "nahi, is liye neeche ki ibarat aarzi hai.",
     "stage_running_note": "Parhne ka amal Google ke servers par hota hai aur chand second leta "
                           "hai. Aap ki file mehfooz nahi ki jati.",
     "extracted_requirements": "Is dastavez mein bayan karda shartein",
