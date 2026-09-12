@@ -4,7 +4,7 @@
 Companion to `README.md` (which is the *setup* guide). This file is the *work* guide.
 
 - **Created:** 2026-09-10
-- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Interaction refinement pass: checklist fix, visible field states, motion. 47 items closed, 195 tests passing
+- **Last updated:** 2026-09-11 — branch `feature/ux-overhaul-and-fixes`: Interaction refinement pass: checklist fix, visible field states, motion. 55 items closed, 233 tests passing
 - **Baseline audited:** full read of all 10 source files, 5 data files, config, and a live environment verification run.
 
 ---
@@ -54,7 +54,7 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **195/195 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Unit tests | **233/233 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **3** opportunities: `hec_balochistan_fata_ug` (scholarship), `navttc_hunarmand_pakistan` (skills), `peef_punjab_undergraduate` (scholarship) |
 | Job records loaded | **0** — all `njp_jobs_sample.json` entries are `REPLACE ME` placeholders and are correctly skipped by the loader |
 | Dependencies | streamlit 1.63.0, google-generativeai 0.8.6 (EOL, still supported as fallback), chromadb 1.5.9, sentence-transformers 6.0.1. `google-genai` is **not** installed — install it to move off the EOL SDK |
@@ -119,6 +119,14 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | V2-6 | Next best action on every result | `next_action.py` (new) | **P0** | **DONE** | — |
 | V2-7 | Responsible-AI architecture made visible | `app.py` | **P0** | **DONE** | — |
 | V2-8 | Landing: four paths including the Lens, plus benefits | `app.py` | **P0** | **DONE** | — |
+| P1-1 | Application readiness from the document checklist | `readiness.py` (new) | **P1** | **DONE** | — |
+| P1-2 | Deadline intelligence — urgency states, never encourage an expired listing | `timeliness.py` (new) | **P1** | **DONE** | — |
+| P1-3 | Contextual follow-up questions, evidence scoped to one record | `rag_engine.py` + `app.py` | **P1** | **DONE** | — |
+| P1-4 | Opportunity Passport — answer once, reuse everywhere | `app.py` | **P1** | **DONE** | — |
+| P1-5 | Opportunity comparison on structured factors | `comparison.py` (new) | **P1** | **DONE** | — |
+| P1-6 | Information freshness from `last_verified` | `timeliness.py` | **P1** | **DONE** | — |
+| P1-7 | Explain Like I'm New — simplify, never reinterpret | `llm_client.py` + `app.py` | **P1** | **DONE** | — |
+| P1-8 | Source presentation: document, organisation, link, date | `app.py` | **P1** | **DONE** | — |
 | UX-07 | Document checklist count/bar lagged one interaction behind | `app.py` | **P0** | **DONE** | — |
 | UX-08 | Form fields had no visible boundary until clicked | `styles/` | **P0** | **DONE** | — |
 | UX-09 | No motion system; header was not a distinct layer | `styles/` + `app.py` | **P1** | **DONE** | — |
@@ -431,6 +439,153 @@ ceiling into structured fields.
 - [x] Model name confirmed against the live API.
 - [x] A real text generation succeeds, in both languages.
 - [x] A real image extraction succeeds.
+
+---
+
+### V2 — P1 upgrade (branch `v2`)
+
+Implements `Sahulat_AI_V2_P1_High_Priority.md`.
+
+**The thread running through this batch is absence.** No deadline on record,
+never verified, no documents listed, evidence that does not exist. Each of
+those has a comfortable-looking reading — "plenty of time", "fine", "nothing
+needed", "here is an answer anyway" — and each of those readings is wrong.
+Most of the work below is making absence visible rather than letting it
+default to reassurance.
+
+---
+
+#### P1-1 — Application readiness
+**Area:** `core/readiness.py` (new), `app.py` · **Status:** **DONE**
+
+The document checklist became a readiness view: a percentage, the documents
+ticked, and the ones still needed.
+
+**This percentage is legitimate where a "match %" was not**, and the
+difference is worth stating: every term here is something the user ticked or
+the record lists, and it is computed from the very rows displayed beneath it.
+V2-1 refused a percentage because it would have been a guess at an awarding
+body's decision. This one is arithmetic over a checklist.
+
+Two guards: it floors rather than rounds, so 198 of 199 documents reads 99%
+and never 100%; and a record with no documents listed reads 0%, not complete —
+"nothing required" is not something the catalogue knows.
+
+**Connected to the next step**, as the brief asks: with nothing ticked the
+action is "prepare the 7 documents"; once the user has started it becomes
+"obtain the next document you are missing — <name>"; when all are ticked it
+becomes "apply". That reads widget state directly rather than the derived set,
+because the derived set is only rebuilt when the checklist renders — the same
+one-interaction lag that was UX-07.
+
+---
+
+#### P1-2 — Deadline intelligence
+**Area:** `core/timeliness.py` (new), `app.py` · **Status:** **DONE**
+
+Five states, not four: **passed · approaching (≤3 days) · apply soon (≤14) ·
+plenty of time · no deadline on record.**
+
+That fifth state is the point. Every curated record currently has
+`application_deadline: null`, so it is the state users meet *most often*, and
+folding it into "plenty of time" would have turned missing data into a
+reassurance across the entire catalogue. It renders with a dashed border, its
+own label, and the line *"We have no application deadline for this record.
+Check the official source before assuming it is still open."* An unparseable
+date lands there too, rather than being read as expired.
+
+Expired listings get an explicit "nothing here is worth preparing" note, and
+the next-step ladder already refuses to send anyone to a closed application —
+now covered by a test that puts a complete profile and a full checklist
+against an expired listing and asserts the step is still not "apply".
+
+---
+
+#### P1-3 — Contextual follow-up
+**Area:** `core/rag_engine.py`, `app.py` · **Status:** **DONE**
+
+Each result carries its own question chips, chosen from its state: a user who
+is eligible is never offered "why am I not eligible?". Evidence comes from
+`retrieve_for()`, which returns that one record's text **or nothing** — never
+a near-miss from another scheme. Retrieving across the catalogue for a
+question about a specific scholarship is how a confident, well-cited answer
+about the *wrong* scholarship gets written.
+
+---
+
+#### P1-4 — Opportunity Passport
+**Area:** `app.py` · **Status:** **DONE**
+
+The session profile given a name and a visible home, with completion, an edit
+route, and reuse stated on the upload path ("using your saved answers"). The
+privacy line names what is deliberately absent — no CNIC, name, phone or
+address — because that absence is the entire reason it can be reused freely.
+Replaced the old "your answers" expander, which is now deleted rather than
+left to rot beside it (both claimed the same widget key).
+
+---
+
+#### P1-5 — Opportunity comparison
+**Area:** `core/comparison.py` (new), `app.py` · **Status:** **DONE**
+
+Pick two or more results and compare eligibility, conditions met, deadline,
+documents still needed, open questions and whether an official link exists.
+Reflects documents already gathered rather than assuming the user holds none.
+
+**The summary compares effort, and says so.** It is computed from three
+countable things, weighted so that one unmet condition outweighs any amount of
+paperwork — paperwork can be obtained, a failed condition cannot. It carries
+the caveat *"This compares effort, not value"*, because a small award with a
+short form is "less work" and that has nothing to do with which is worth
+having. Where the numbers are close it returns **no leader at all**: naming a
+winner the numbers do not support would turn a comparison into a
+recommendation. A blocked or expired option can never be "easiest".
+
+---
+
+#### P1-6 — Information freshness
+**Area:** `core/timeliness.py`, `app.py` · **Status:** **DONE**
+
+Four states from `last_verified`: **recent (≤30 days) · verification
+recommended (≤180) · likely out of date · never verified by us.**
+
+An unverified record is "never" *whatever date it carries* — a date never
+backed by a real check is not evidence, which is the DATA-01 failure mode
+exactly. An uploaded record is "never" too: reading a document is not
+verifying it, however clearly the model read it. All three curated records
+currently sit at "never", and the UI says so rather than letting presence in
+the catalogue imply currency. Verification is prompted by default.
+
+---
+
+#### P1-7 — Explain Like I'm New
+**Area:** `core/llm_client.py`, `app.py` · **Status:** **DONE**
+
+Five plain-language sections: who it is for, what you get, who can apply, what
+you need, where to apply.
+
+The brief's rule — *simplify, do not reinterpret* — is enforced structurally
+rather than by asking nicely. The model is handed **only the record's own
+statements**: no profile, no eligibility result. It cannot tell a reader they
+qualify because it has never been told. The prompt forbids adding, weakening
+or strengthening any condition ("at least 60% marks" must not become "good
+marks"), and any key we did not ask for is dropped rather than rendered — so
+a model volunteering `"you_are_eligible"` gets discarded, not displayed.
+
+Placed after the scorecard, never instead of it, with a caveat naming the
+conditions above as the authority. Verified live: the rewrite kept "between 17
+and 25" and "at least Intermediate" intact, and said the document "does not
+state" an application URL rather than inventing one.
+
+---
+
+#### P1-8 — Source presentation
+**Area:** `app.py` · **Status:** **DONE**
+
+The source block now labels every field the brief asks for — source document,
+organisation, official page, last verified — as readable rows rather than a
+citation footnote, with the freshness badge beside the heading and an explicit
+"no official link on record" where there is none.
 
 ---
 
@@ -1448,6 +1603,10 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-12 | **P1-1** — a readiness percentage IS shown, unlike a match score | Every term is something the user ticked or the record lists, and it is computed from the rows displayed beneath it. A match score would be a guess at an awarding body's decision; this is arithmetic over a checklist | Claude |
+| 2026-09-12 | **P1-2** — "no deadline on record" is a fifth state, not "plenty of time" | Every curated record currently has a null deadline, so this is the state users meet most often. Folding it into the benign band would turn missing data into reassurance across the whole catalogue | Claude |
+| 2026-09-12 | **P1-5** — the comparison names no winner when the numbers are close | Below a set margin it returns no leader. Manufacturing one turns a comparison into a recommendation, and "less effort" is not "better" | Claude |
+| 2026-09-12 | **P1-7** — the simplifier is given no profile and no verdict | The brief's "simplify, do not reinterpret" rule is enforced by what the model is handed, not by asking it nicely. It cannot leak an eligibility claim it was never told | Claude |
 | 2026-09-11 | **V2-1** — count of conditions, not a percentage match score | A percentage reads as a probability of being awarded, which no rule here computes; the brief's own warning describes exactly that misreading. A count is checkable against the rows beneath it | Claude |
 | 2026-09-11 | **V2-3** — rank on required-document count, not "missing documents" | The app never learns which documents a user holds; the checklist is UI state. Ranking on "missing" would have required inventing that knowledge. Late tie-break only, documented | Claude |
 | 2026-09-11 | **V2-4** — drop extracted values outside the known vocabulary | A mis-mapped gender or field of study becomes a real eligibility gate and wrongly excludes people. Unread is recoverable; wrong is not | Claude |
@@ -1492,6 +1651,8 @@ Append one line per completed piece of work.
 | 2026-09-11 | PERF-01..04 | Lazy + `@st.cache_resource` retrieval, offline model loading, opt-in semantic search, `.streamlit/config.toml`. **First render measured at 1.07s** (was ~30-35s), with no heavy modules imported at page load. |
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
+| 2026-09-12 | **V2 P1** | Branch `v2`: application readiness, deadline intelligence, scoped contextual Q&A, opportunity passport, comparison, freshness, plain-language explainer, source presentation. New modules `core/readiness.py`, `core/timeliness.py`, `core/comparison.py`. |
+| 2026-09-12 | TEST-01 | Suite grown 195 → **233 tests** (new `tests/test_p1_features.py`). |
 | 2026-09-11 | **V2 P0** | Branch `v2`: eligibility scorecard, why/why-not explanations, deterministic top matches, Lens schema + correction, trust tests, next best action, architecture showcase, landing paths. New module `core/next_action.py`. |
 | 2026-09-11 | TEST-01 | Suite grown 143 → **195 tests** (new `tests/test_v2_features.py`). |
 | 2026-09-11 | UX-10 | Upload result rebuilt as a readable document summary (raw JSON moved behind a disclosure); conditions rendered in prose via a shared i18n path, with unstated ones shown and explicitly not counted as qualifying. |

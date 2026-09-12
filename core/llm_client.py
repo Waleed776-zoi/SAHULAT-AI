@@ -223,6 +223,85 @@ def _mock_explanation(match_result_summary: str, language: str) -> str:
     return f"{t('ai_mock_notice', language)}\n\n{match_result_summary}"
 
 
+SIMPLIFY_SYSTEM_PROMPT = """You rewrite Pakistani government opportunity
+listings into plain, simple language for someone who finds official documents
+hard to read. Many readers have limited formal education, so write the way you
+would speak to a neighbour.
+
+YOU ARE A TRANSLATOR, NOT AN ADVISOR. Every sentence you write must be
+traceable to a fact given to you below.
+
+ABSOLUTE RULES:
+- Use ONLY the facts provided. Never add a requirement, amount, date, quota or
+  benefit that is not written in them. A reader may miss a real deadline or
+  give up on a scholarship they qualify for because of an invented detail.
+- Never simplify a condition into something weaker or stronger. "At least 60%
+  marks" does not become "good marks". Keep every number exactly as given.
+- Never say whether this particular reader is eligible, likely to be selected,
+  or should apply. That decision is made elsewhere and is not yours.
+- If a section has no facts to draw on, say plainly that the document does not
+  state it. Do not fill the gap.
+- Short sentences. No jargon. No bureaucratic phrasing.
+
+Return ONLY valid JSON, no markdown fences, exactly this shape:
+
+{
+  "who_is_this_for": string,
+  "what_you_get": string,
+  "who_can_apply": string,
+  "what_you_need": string,
+  "where_to_apply": string
+}
+"""
+
+SIMPLIFY_SECTIONS = ("who_is_this_for", "what_you_get", "who_can_apply",
+                     "what_you_need", "where_to_apply")
+
+
+def simplify_opportunity(facts: str, language: str = "en") -> Dict[str, Any]:
+    """
+    Plain-language version of one opportunity (P1-7).
+
+    `facts` must contain ONLY what the record itself states - the caller builds
+    it from structured fields, never from an eligibility result. The model is
+    given no profile and no verdict, so it has nothing to reinterpret: it
+    cannot tell the reader they qualify because it has not been told.
+
+    Returns a dict of the sections above, plus "_error"/"_mock" markers the UI
+    uses to label the output honestly. Never raises.
+    """
+    if _client() is None:
+        return {**_mock_simplification(facts, language), "_mock": True}
+
+    lang_instruction = "Write in simple Urdu." if language == "ur" else "Write in simple English."
+    try:
+        raw = _generate(SIMPLIFY_SYSTEM_PROMPT,
+                        [f"{lang_instruction}\n\nFacts from the record:\n{facts}"])
+    except Exception as exc:
+        log.warning("simplify_opportunity failed: %s", exc)
+        return {"_error": str(exc)}
+
+    try:
+        parsed = json.loads(_strip_code_fences(raw))
+        if not isinstance(parsed, dict):
+            raise ValueError("Top-level JSON value is not an object")
+    except (json.JSONDecodeError, ValueError) as exc:
+        log.warning("simplify_opportunity returned non-JSON: %s", exc)
+        return {"_error": str(exc), "_raw_model_output": raw}
+
+    # Keep only the sections we asked for, as strings. An unexpected key is
+    # not rendered: this output goes on screen as plain guidance, so anything
+    # unrecognised is dropped rather than displayed.
+    return {section: str(parsed[section]).strip()
+            for section in SIMPLIFY_SECTIONS
+            if isinstance(parsed.get(section), (str, int, float)) and str(parsed[section]).strip()}
+
+
+def _mock_simplification(facts: str, language: str) -> Dict[str, Any]:
+    """Offline stand-in. Clearly labelled, and invents nothing."""
+    return {"who_can_apply": f"{t('ai_mock_notice', language)}\n\n{facts}"}
+
+
 # ---------------------------------------------------------------------------
 # 2. Grounded follow-up chat (RAG-style: evidence chunks passed in explicitly)
 # ---------------------------------------------------------------------------

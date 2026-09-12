@@ -64,10 +64,25 @@ class TestDocumentChecklistStaysInSync(unittest.TestCase):
         self.total = len(self.keys)
 
     def shown(self):
-        for caption in self.app.caption:
-            match = re.match(r"^(\d+) of (\d+) ready$", str(caption.value).strip())
+        """
+        The count as the page states it.
+
+        P1-1 moved this into the readiness header; the behaviour under test is
+        unchanged, so the assertion is not relaxed - it just reads the number
+        from where the number now lives. Also picks up the readiness percent so
+        a test can check the two never disagree.
+        """
+        for block in self.app.markdown:
+            match = re.search(r'sa-ready-count">(\d+) of (\d+) ready<', str(block.value))
             if match:
                 return int(match.group(1)), int(match.group(2))
+        return None
+
+    def shown_percent(self):
+        for block in self.app.markdown:
+            match = re.search(r'sa-ready-num">(\d+)% ready<', str(block.value))
+            if match:
+                return int(match.group(1))
         return None
 
     def actual(self):
@@ -96,6 +111,51 @@ class TestDocumentChecklistStaysInSync(unittest.TestCase):
         for index, key in enumerate(self.keys, 1):
             self.app.checkbox(key=key).uncheck().run()
             self.assert_in_sync(f"after unticking {index}")
+
+
+class TestReadinessPercent(unittest.TestCase):
+    """
+    P1-1: the readiness figure is a count of the checklist, so it must track
+    the boxes exactly - including never reading 100% while something is left.
+    """
+
+    def setUp(self):
+        self.app = at_results()
+        keys = [c.key for c in self.app.checkbox
+                if c.key and c.key.startswith("doc_")]
+        prefix = keys[0].rsplit("_", 1)[0]
+        self.keys = [k for k in keys if k.startswith(prefix)]
+
+    def percent(self):
+        for block in self.app.markdown:
+            match = re.search(r'sa-ready-num">(\d+)% ready<', str(block.value))
+            if match:
+                return int(match.group(1))
+        return None
+
+    def test_starts_at_zero(self):
+        self.assertEqual(self.percent(), 0)
+
+    def test_never_reads_full_while_something_is_missing(self):
+        for key in self.keys[:-1]:
+            self.app.checkbox(key=key).check().run()
+        self.assertLess(self.percent(), 100)
+
+    def test_reads_full_only_when_everything_is_ticked(self):
+        for key in self.keys:
+            self.app.checkbox(key=key).check().run()
+        self.assertEqual(self.percent(), 100)
+
+    def test_next_step_follows_the_checklist(self):
+        """
+        P1-1 connects the checklist to the next action: once some documents
+        are gathered, "prepare your documents" is no longer the useful step.
+        """
+        body = " ".join(str(m.value) for m in self.app.markdown)
+        self.assertIn("Prepare the", body)
+        self.app.checkbox(key=self.keys[0]).check().run()
+        body = " ".join(str(m.value) for m in self.app.markdown)
+        self.assertIn("Obtain the next document", body)
 
 
 class TestMotionDoesNotReplay(unittest.TestCase):

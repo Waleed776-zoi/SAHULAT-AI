@@ -25,13 +25,15 @@ from core.models import (
     MatchResult,
     STATUS_ELIGIBLE, STATUS_NEEDS_VERIFICATION, STATUS_NOT_ELIGIBLE,
 )
+from core.readiness import readiness
 
 # Machine keys. i18n owns the wording for each.
 ACTION_EXPLORE_OTHERS = "explore_others"       # this listing has closed
 ACTION_REVIEW_BLOCKER = "review_blocker"       # a condition is demonstrably unmet
 ACTION_ANSWER_MISSING = "answer_missing"       # we can settle it by asking the user
 ACTION_CONFIRM_CONDITION = "confirm_condition"  # only the source can settle it
-ACTION_PREPARE_DOCUMENTS = "prepare_documents"  # eligible, documents are known
+ACTION_PREPARE_DOCUMENTS = "prepare_documents"  # eligible, none ticked yet
+ACTION_OBTAIN_DOCUMENT = "obtain_document"      # eligible, specific one missing
 ACTION_APPLY = "apply"                          # eligible, official link known
 ACTION_CHECK_SOURCE = "check_source"            # fallback: go to the source
 
@@ -47,7 +49,7 @@ class NextAction:
     check_keys: List[str] = field(default_factory=list)
 
 
-def next_action(match: MatchResult) -> NextAction:
+def next_action(match: MatchResult, documents_ready=None) -> NextAction:
     """
     The one thing worth doing next about this result.
 
@@ -66,8 +68,11 @@ def next_action(match: MatchResult) -> NextAction:
          b. they answered and the *record* is incomplete -> only the official
             source can settle it.
        (a) is checked first because it is the cheaper fix.
-    4. Eligible with known required documents -> prepare them.
-    5. Eligible with an official link -> apply.
+    4. Eligible with documents outstanding -> name the next one to obtain.
+       This is where the checklist feeds back in (P1-1): once the user has
+       ticked things off, "prepare your documents" stops being useful and the
+       step becomes the specific paper still missing.
+    5. Eligible with everything ticked, or with a link -> apply.
     6. Anything else -> go and read the source.
     """
     opportunity = match.opportunity
@@ -102,6 +107,17 @@ def next_action(match: MatchResult) -> NextAction:
         )
 
     if match.overall_status == STATUS_ELIGIBLE and opportunity.required_documents:
+        checklist = readiness(opportunity, documents_ready or set())
+        if checklist.is_complete:
+            # Everything gathered: the next step is the application itself.
+            return NextAction(ACTION_APPLY, url=opportunity.official_url or None)
+        if checklist.have:
+            return NextAction(
+                ACTION_OBTAIN_DOCUMENT,
+                subject={"document": checklist.next_missing(),
+                         "remaining": len(checklist.missing)},
+                url=opportunity.official_url or None,
+            )
         return NextAction(
             ACTION_PREPARE_DOCUMENTS,
             subject={"count": len(opportunity.required_documents)},
@@ -114,10 +130,11 @@ def next_action(match: MatchResult) -> NextAction:
     return NextAction(ACTION_CHECK_SOURCE, url=opportunity.official_url or None)
 
 
-def is_actionable_now(match: MatchResult) -> bool:
+def is_actionable_now(match: MatchResult, documents_ready=None) -> bool:
     """
     Whether the next step moves the user toward applying, rather than toward
     finding out more. Used only to decide visual emphasis - never to change
     an eligibility status.
     """
-    return next_action(match).key in (ACTION_PREPARE_DOCUMENTS, ACTION_APPLY)
+    return next_action(match, documents_ready).key in (
+        ACTION_PREPARE_DOCUMENTS, ACTION_OBTAIN_DOCUMENT, ACTION_APPLY)

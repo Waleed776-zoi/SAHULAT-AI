@@ -135,6 +135,25 @@ class RagIndex:
             self._chroma_collection = None
             self.mode = MODE_KEYWORD
 
+    def retrieve_for(self, opportunity_id: str, query: str) -> List[str]:
+        """
+        Evidence from ONE record (P1-3).
+
+        When the user is asking about a specific opportunity, retrieving across
+        the whole catalogue is worse than useless: it hands the model text
+        about a different scheme labelled "evidence", which is exactly how a
+        confident answer about the wrong scholarship gets produced.
+
+        Returns the record's own text, or [] if that id is not in the index -
+        never a near-miss from somewhere else.
+        """
+        if not query or not query.strip():
+            return []
+        for opportunity, document in zip(self.opportunities, self._docs):
+            if opportunity.opportunity_id == opportunity_id:
+                return [document]
+        return []
+
     def retrieve(self, query: str, top_k: int = 3) -> List[str]:
         if not query or not query.strip():
             return []

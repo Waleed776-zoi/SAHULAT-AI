@@ -379,6 +379,123 @@ STRINGS: Dict[str, Dict[str, str]] = {
     "benefit_realworld_body": {"en": "Upload a poster or PDF you found anywhere else.",
                                "ur": "کہیں سے بھی ملا اشتہار یا PDF اپلوڈ کریں۔"},
 
+    # ================= P1-1: application readiness ========================
+    "readiness_heading": {"en": "Application readiness", "ur": "درخواست کی تیاری"},
+    "readiness_percent": {"en": "{percent}% ready", "ur": "{percent}% تیار"},
+    "readiness_none": {"en": "Nothing ticked yet", "ur": "ابھی کچھ منتخب نہیں"},
+    "documents_you_have": {"en": "Documents you have", "ur": "آپ کے پاس موجود دستاویزات"},
+    "documents_still_needed": {"en": "Still needed", "ur": "ابھی درکار"},
+    "readiness_note": {
+        "en": "This tracks the checklist you fill in. It does not check that a document "
+              "is valid, current or accepted - only the issuing office can do that.",
+        "ur": "یہ صرف آپ کی بھری ہوئی فہرست دکھاتا ہے۔ یہ نہیں جانچتا کہ دستاویز درست، موجودہ یا قابلِ قبول ہے — یہ صرف متعلقہ دفتر طے کر سکتا ہے۔"},
+    "action_obtain_document": {
+        "en": "Obtain the next document you are missing - {subject}",
+        "ur": "اگلی درکار دستاویز حاصل کریں — {subject}"},
+
+    # ================= P1-2: deadline intelligence ========================
+    "urgency_passed": {"en": "Deadline passed", "ur": "آخری تاریخ گزر چکی"},
+    "urgency_imminent": {"en": "Deadline approaching", "ur": "آخری تاریخ قریب"},
+    "urgency_soon": {"en": "Apply soon", "ur": "جلد درخواست دیں"},
+    "urgency_plenty": {"en": "Plenty of time", "ur": "کافی وقت باقی"},
+    "urgency_unknown": {"en": "No deadline on record", "ur": "آخری تاریخ درج نہیں"},
+    "days_remaining": {"en": "{days} days remaining", "ur": "{days} دن باقی"},
+    "days_remaining_one": {"en": "1 day remaining", "ur": "1 دن باقی"},
+    "days_remaining_today": {"en": "Last day today", "ur": "آج آخری دن"},
+    "days_since_passed": {"en": "Closed {days} days ago", "ur": "{days} دن پہلے بند ہوا"},
+    "urgency_unknown_note": {
+        "en": "We have no application deadline for this record. Check the official source "
+              "before assuming it is still open.",
+        "ur": "اس اندراج کے لیے ہمارے پاس کوئی آخری تاریخ نہیں۔ کھلا ہونے کا اندازہ لگانے سے پہلے سرکاری ذریعہ دیکھیں۔"},
+    "urgency_passed_note": {
+        "en": "Applications are closed. Nothing here is worth preparing until the next cycle opens.",
+        "ur": "درخواستیں بند ہیں۔ اگلا مرحلہ کھلنے تک یہاں کچھ تیار کرنے کی ضرورت نہیں۔"},
+
+    # ================= P1-3: contextual follow-up =========================
+    "ask_about_this": {"en": "Ask about this opportunity", "ur": "اس موقع کے بارے میں پوچھیں"},
+    "ask_scoped_note": {
+        "en": "Answers use only this record's own text as evidence.",
+        "ur": "جوابات صرف اسی اندراج کے متن کو بطور شواہد استعمال کرتے ہیں۔"},
+    "chip_why_eligible": {"en": "Why am I eligible?", "ur": "میں کیوں اہل ہوں؟"},
+    "chip_why_not_eligible": {"en": "Why am I not eligible?", "ur": "میں کیوں اہل نہیں؟"},
+    "chip_what_verify": {"en": "What needs verification?", "ur": "کس چیز کی تصدیق درکار ہے؟"},
+    "chip_this_deadline": {"en": "What is the deadline?", "ur": "آخری تاریخ کیا ہے؟"},
+    "chip_where_apply": {"en": "Where do I apply?", "ur": "درخواست کہاں دوں؟"},
+    "chip_this_documents": {"en": "What documents do I need?", "ur": "کون سی دستاویزات چاہئیں؟"},
+
+    # ================= P1-4: opportunity passport =========================
+    "passport_heading": {"en": "My opportunity passport", "ur": "میرا مواقع پاسپورٹ"},
+    "passport_lede": {
+        "en": "Answer once, reuse everywhere. These details are matched against every "
+              "opportunity you open, including ads you upload.",
+        "ur": "ایک بار جواب دیں، ہر جگہ استعمال کریں۔ یہ تفصیلات ہر موقع پر لاگو ہوتی ہیں، بشمول اپلوڈ کیے گئے اشتہارات۔"},
+    "passport_privacy": {
+        "en": "No CNIC, name, phone number or address is asked for or stored. Your answers "
+              "stay in this browser session and are cleared when you start over.",
+        "ur": "شناختی کارڈ، نام، فون نمبر یا پتہ نہ مانگا جاتا ہے نہ محفوظ کیا جاتا ہے۔ آپ کے جوابات صرف اس سیشن میں رہتے ہیں۔"},
+    "passport_complete": {"en": "{percent}% complete", "ur": "{percent}% مکمل"},
+    "passport_reuse": {"en": "Using your saved answers", "ur": "آپ کے محفوظ جوابات استعمال ہو رہے ہیں"},
+
+    # ================= P1-5: comparison ===================================
+    "compare_heading": {"en": "Compare opportunities", "ur": "مواقع کا موازنہ"},
+    "compare_hint": {"en": "Pick two or more to compare side by side.",
+                     "ur": "موازنے کے لیے دو یا زیادہ منتخب کریں۔"},
+    "compare_factor": {"en": "Factor", "ur": "پہلو"},
+    "compare_eligibility": {"en": "Eligibility", "ur": "اہلیت"},
+    "compare_conditions": {"en": "Conditions met", "ur": "پوری شرائط"},
+    "compare_deadline": {"en": "Deadline", "ur": "آخری تاریخ"},
+    "compare_documents": {"en": "Documents still needed", "ur": "درکار دستاویزات"},
+    "compare_verification": {"en": "Open questions", "ur": "زیرِ التوا سوالات"},
+    "compare_apply": {"en": "Official link", "ur": "سرکاری ربط"},
+    "compare_easiest": {
+        "en": "{name} looks less work to pursue: {reasons}.",
+        "ur": "{name} کے لیے نسبتاً کم محنت درکار ہے: {reasons}۔"},
+    "compare_reason_fewer_blockers": {"en": "fewer unmet conditions", "ur": "کم غیر پوری شرائط"},
+    "compare_reason_fewer_gaps": {"en": "fewer open questions", "ur": "کم زیرِ التوا سوالات"},
+    "compare_reason_fewer_documents": {"en": "fewer documents left to gather",
+                                       "ur": "کم دستاویزات جمع کرنا باقی"},
+    "compare_effort_caveat": {
+        "en": "This compares effort, not value. It says nothing about which award is worth "
+              "more or which you are more likely to receive.",
+        "ur": "یہ محنت کا موازنہ ہے، فائدے کا نہیں۔ یہ نہیں بتاتا کہ کون سا وظیفہ زیادہ بہتر ہے یا ملنے کا امکان زیادہ ہے۔"},
+    "compare_too_close": {
+        "en": "These look about equally involved. Choose on what the award actually offers.",
+        "ur": "دونوں تقریباً برابر محنت طلب ہیں۔ فیصلہ اس بنیاد پر کریں کہ کیا پیشکش ہے۔"},
+
+    # ================= P1-6: freshness ====================================
+    "freshness_heading": {"en": "Information freshness", "ur": "معلومات کی تازگی"},
+    "freshness_recent": {"en": "Recently verified", "ur": "حال ہی میں تصدیق شدہ"},
+    "freshness_aging": {"en": "Verification recommended", "ur": "تصدیق کی سفارش"},
+    "freshness_stale": {"en": "Likely out of date", "ur": "غالباً پرانی"},
+    "freshness_never": {"en": "Never verified by us", "ur": "ہماری طرف سے کبھی تصدیق نہیں"},
+    "freshness_days": {"en": "Checked {days} days ago", "ur": "{days} دن پہلے جانچا گیا"},
+    "freshness_never_note": {
+        "en": "Nobody on our team has confirmed this record against the official source. "
+              "Being in the catalogue is not evidence that it is current.",
+        "ur": "ہماری ٹیم نے اس اندراج کی سرکاری ذریعے سے تصدیق نہیں کی۔ فہرست میں ہونا موجودہ ہونے کا ثبوت نہیں۔"},
+    "freshness_prompt": {
+        "en": "Confirm the details on the official page before you rely on them.",
+        "ur": "ان تفصیلات پر انحصار سے پہلے سرکاری صفحے پر تصدیق کریں۔"},
+
+    # ================= P1-7: explain like I'm new =========================
+    "eli5_heading": {"en": "In plain language", "ur": "آسان زبان میں"},
+    "eli5_button": {"en": "Explain this simply", "ur": "آسان الفاظ میں سمجھائیں"},
+    "eli5_who_is_this_for": {"en": "Who is this for?", "ur": "یہ کس کے لیے ہے؟"},
+    "eli5_what_you_get": {"en": "What do you get?", "ur": "آپ کو کیا ملتا ہے؟"},
+    "eli5_who_can_apply": {"en": "Who can apply?", "ur": "کون درخواست دے سکتا ہے؟"},
+    "eli5_what_you_need": {"en": "What do you need?", "ur": "آپ کو کیا درکار ہے؟"},
+    "eli5_where_to_apply": {"en": "Where do you apply?", "ur": "درخواست کہاں دیں؟"},
+    "eli5_caveat": {
+        "en": "Reworded by AI from this record only. It cannot add or soften a requirement, "
+              "and it does not decide your eligibility - the conditions above do.",
+        "ur": "یہ صرف اسی اندراج سے AI نے آسان الفاظ میں لکھا ہے۔ یہ کوئی شرط بڑھا یا نرم نہیں کر سکتا، اور اہلیت کا فیصلہ نہیں کرتا — وہ اوپر کی شرائط کرتی ہیں۔"},
+
+    # ================= P1-8: source presentation ==========================
+    "source_title_label": {"en": "Source document", "ur": "ماخذ دستاویز"},
+    "source_org_label": {"en": "Organisation", "ur": "ادارہ"},
+    "source_url_label": {"en": "Official page", "ur": "سرکاری صفحہ"},
+    "source_none": {"en": "No official link on record", "ur": "کوئی سرکاری ربط درج نہیں"},
+
     # -- follow-up chat -----------------------------------------------------
     "ask_followup": {"en": "Ask a follow-up question", "ur": "مزید سوال پوچھیں"},
     "ask_followup_hint": {
@@ -1177,6 +1294,8 @@ def describe_next_action(action, lang: str = "en") -> str:
         return t("action_answer_missing_many", lang, count=len(fields))
     if key == "prepare_documents":
         return t("action_prepare_documents", lang, subject=action.subject.get("count", ""))
+    if key == "obtain_document":
+        return t("action_obtain_document", lang, subject=action.subject.get("document", ""))
     return t(f"action_{key}", lang)
 
 
@@ -1206,6 +1325,57 @@ def describe_ranking_reason(factors: dict, lang: str = "en") -> str:
 
     separator = " · "
     return separator.join(parts[:3])
+
+
+def describe_urgency(urgency: str, days=None, lang: str = "en"):
+    """
+    Deadline state as (label, detail) (P1-2).
+
+    "No deadline on record" is returned as its own label, never folded into
+    "plenty of time": most curated records carry no deadline, so that is the
+    state users meet most often, and it is the one where reassurance would do
+    the most harm.
+    """
+    label = t(f"urgency_{urgency}", lang)
+    if days is None:
+        return label, t("urgency_unknown_note", lang) if urgency == "unknown" else ""
+    if days < 0:
+        return label, t("days_since_passed", lang, days=abs(days))
+    if days == 0:
+        return label, t("days_remaining_today", lang)
+    if days == 1:
+        return label, t("days_remaining_one", lang)
+    return label, t("days_remaining", lang, days=days)
+
+
+def describe_freshness(state: str, days=None, lang: str = "en"):
+    """Record freshness as (label, detail) (P1-6)."""
+    label = t(f"freshness_{state}", lang)
+    if state == "never":
+        return label, t("freshness_never_note", lang)
+    if days is None:
+        return label, ""
+    return label, t("freshness_days", lang, days=days)
+
+
+def describe_comparison(comparison, lang: str = "en") -> str:
+    """
+    The one-line summary under a comparison (P1-5).
+
+    Returns the "too close to call" line when no option is meaningfully
+    easier. Naming a winner where the numbers do not support one would turn a
+    comparison into a recommendation.
+    """
+    if not comparison.easiest_id:
+        return t("compare_too_close", lang)
+    row = next((r for r in comparison.rows
+                if r.opportunity_id == comparison.easiest_id), None)
+    if row is None:
+        return t("compare_too_close", lang)
+    reasons = [t(f"compare_reason_{reason['key']}", lang) for reason in comparison.reasons]
+    if not reasons:
+        return t("compare_too_close", lang)
+    return t("compare_easiest", lang, name=row.name, reasons=join_list(reasons, lang))
 
 
 def describe_requirements(conditions, lang: str = "en"):
