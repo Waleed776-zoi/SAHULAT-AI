@@ -54,7 +54,7 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **360/360 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Unit tests | **368/368 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **30** opportunities: 2 scholarship, 10 job, 8 skills, 10 assistance. **No category is empty.** |
 | Job records loaded | **10** — `government_jobs.json`, curated 2026-09-12, all marked verified. Every record carries a future provisional deadline |
 | Assistance records loaded | **10** — `public_assistance.json`, curated 2026-09-12. All continuous-enrolment; two are gated on `required_groups` |
@@ -115,6 +115,7 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | UI-03 | The hero decorated rather than demonstrated (V3 spec 13.2) | `app.py` | **P0** | **DONE** | — |
 | UI-04 | Every AI call but the Lens showed a wordless spinner | `app.py` | **P1** | **DONE** | — |
 | UI-05 | Hero preview cycles through one real result per category | `app.py` + CSS | **P2** | **DONE** | Waleed |
+| UI-06 | Language moves into the brand bar as one picker | `app.py` + CSS | **P2** | **DONE** | Waleed |
 | BUG-03 | Zero income / zero marks silently become "not provided" | `app.py` | **P1** | **DONE** | — |
 | BUG-04 | Expired deadline reported as user ineligibility | `rules_engine.py` | **P1** | **DONE** | — |
 | I18N-01 | `name_ur` / `summary_ur` exist in data but are never displayed | `app.py` | **P1** | **DONE** | — |
@@ -494,6 +495,41 @@ keep the **Provisional date** badge beside the countdown.
 - [x] 10 records, loading, screening, and rendering in all three languages.
 - [x] Every deadline a future date and flagged provisional (DATA-06).
 - [x] 30 new guard tests; suite 261 → 292.
+
+---
+
+#### UI-06 — Language becomes a picker in the brand bar
+**Area:** `app.py`, `styles/components.css` · **Priority:** P2 · **Status:** **DONE** · **Requested by:** Waleed
+
+Three always-visible language buttons took three of the eight slots on the row
+that carries the navigation, for a setting most people touch once and never
+again. They are now one dropdown, in the brand bar, where the right-hand side
+was empty.
+
+**The brand bar had to stop being a single HTML string.** A Streamlit widget
+cannot be nested inside a markdown block, so nothing could ever live in that
+white bar. It is a real two-column row now — identity on one side, language on
+the other.
+
+**Matched by content, not by position.** The stylesheet targets
+`[data-testid="stHorizontalBlock"]:has(.sa-brandbar)`. A positional selector
+would silently stop matching if Streamlit rearranged its wrappers, and an
+unstyled header does not degrade quietly — it looks like a rendering bug.
+
+**The property worth preserving.** P2-1 made each language button carry its own
+script, so a reader who cannot read the other two could still find theirs. That
+survives the move because the option labels themselves carry it: the menu lists
+**اردو**, not "Urdu". The honest cost is that the closed state shows only the
+current language, so a reader who lands on the wrong one must open the picker
+rather than seeing all three at once. The picker sits beside the logo with a
+standard affordance, which is the usual trade for a setting.
+
+Two dead pieces went with it: `.sahulat-header-inner`, which no longer exists,
+and the RTL rule that named it.
+
+- [x] Picker in the bar; all three languages, each in its own script.
+- [x] Switching works and the whole page follows, including RTL.
+- [x] An unknown language in stale session state cannot crash the header.
 
 ---
 
@@ -2216,6 +2252,7 @@ Append one line per completed piece of work.
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
 | 2026-09-12 | **DATA-02** | **Closed.** Waleed verified the eligibility figures and curated 7 more NAVTTC course records: catalogue 3 → **10, all verified**. Metadata (dates, confidence, disclaimers) completed; three `source_date` values were invalid (two in the future, one still `TODO-VERIFY`). |
+| 2026-09-12 | **UI-06** | Language moved into the brand bar as a single picker; the nav row is now three screens and one action. Brand bar became a real columns row, styled via `:has(.sa-brandbar)`. Suite 360 → **368**. |
 | 2026-09-12 | **UI-05** | Hero preview cycles through four real results, one per category, on a 16s CSS loop. Reduced-motion override added — the blanket 1ms rule would have parked every card on an `opacity: 0` keyframe and blanked the hero. Suite 351 → **360**. |
 | 2026-09-12 | **UI-04** | Staged progress on all four remaining AI calls, replacing wordless spinners. Four labelled steps on the follow-up Ask, with pending steps dimmed and blurred. Suite 335 → **351**. |
 | 2026-09-12 | **UI-01/02/03** | **V3 visual spec, structural pass.** Top-level tabs replaced by stateful screens with real header navigation; featured match shows its verdict inline; hero renders a real screening result instead of a decorative SVG. First render 1.16s → **1.05s**. |

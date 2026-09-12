@@ -161,7 +161,7 @@ def inject_css(lang: str) -> None:
     rtl = """
       .stMain .block-container { direction: rtl; text-align: right; }
       .sa-checkrow, .sa-stepper, .sa-inline-trust,
-      .sahulat-header-inner, .sahulat-logo { flex-direction: row-reverse; }
+      .sa-brandbar, .sahulat-logo { flex-direction: row-reverse; }
       a[href^="http"], .sa-ltr { direction: ltr; unicode-bidi: embed;
                                  display: inline-block; }
     """ if urdu else ""
@@ -614,31 +614,64 @@ LOGO_MARK = (
 )
 
 
-def render_header() -> None:
-    """A distinct navigation layer, not another white block (spec 4)."""
-    st.markdown(
-        f'<div class="sahulat-header"><div class="sahulat-header-inner">'
-        f'<div class="sahulat-logo">{LOGO_MARK}'
-        f'<span class="sahulat-logo-name">{t("app_title", lang)}</span>'
-        f'<span class="sahulat-logo-sep">·</span>'
-        f'<span class="sahulat-logo-ur">{t("brand_urdu", lang)}</span></div>'
-        f'</div></div>',
-        unsafe_allow_html=True,
+def render_language_picker() -> None:
+    """
+    One dropdown rather than three buttons.
+
+    Each option is written in its own language, so a reader who cannot read
+    the other two can still find theirs - that was the reason the buttons were
+    always visible, and it survives the move into a menu because the labels
+    themselves carry it.
+    """
+    codes = list(LANGUAGES)
+    chosen = st.selectbox(
+        t("footer_language", lang), codes,
+        index=codes.index(lang) if lang in codes else 0,
+        format_func=lambda code: LANGUAGE_NAMES[code],
+        key="lang_picker", label_visibility="collapsed",
+        help=t("language_help", lang),
     )
+    if chosen != lang:
+        st.session_state.language = chosen
+        st.rerun()
+
+
+def render_header() -> None:
+    """
+    The brand bar: identity on one side, language on the other.
+
+    A real columns row rather than one HTML block, because a Streamlit widget
+    cannot be nested inside a markdown string and the language picker has to
+    live in here. `.sa-brandbar` is the hook the stylesheet matches on.
+    """
+    brand, picker = st.columns([3.4, 1], vertical_alignment="center")
+    with brand:
+        st.markdown(
+            f'<div class="sa-brandbar">{LOGO_MARK}'
+            f'<span class="sahulat-logo-name">{t("app_title", lang)}</span>'
+            f'<span class="sahulat-logo-sep">·</span>'
+            f'<span class="sahulat-logo-ur">{t("brand_urdu", lang)}</span></div>',
+            unsafe_allow_html=True,
+        )
+    with picker:
+        render_language_picker()
 
 
 def render_nav_bar() -> None:
     """
-    The three product screens, plus language and the primary action.
+    The three product screens and the primary action.
 
     Replaces `st.tabs`. A tab strip says "panels of one page"; these are
     different screens with different jobs, and the header is where a product
     puts them. The active item is the only `primary` button on the bar, which
     is what carries the current-location signal - never colour alone.
+
+    Language used to sit here as three buttons. It is a setting, touched once,
+    and it was taking three of the eight slots on the row that carries the
+    navigation - so it moved into the brand bar as a picker.
     """
     st.markdown('<div class="sa-navbar">', unsafe_allow_html=True)
-    columns = st.columns([1.15, 1.75, 1.55, 0.9, 0.66, 0.72, 0.88, 1.75],
-                         vertical_alignment="center")
+    columns = st.columns([1.2, 1.85, 1.6, 1.5, 1.85], vertical_alignment="center")
 
     for column, name in zip(columns[:3], SECTIONS):
         with column:
@@ -648,15 +681,7 @@ def render_nav_bar() -> None:
                          type="primary" if active else "tertiary"):
                 go_to_section(name)
 
-    for column, code in zip(columns[4:7], LANGUAGES):
-        with column:
-            if st.button(LANGUAGE_BUTTONS[code], key=f"lang_{code}",
-                         use_container_width=True, help=LANGUAGE_NAMES[code],
-                         type="primary" if lang == code else "tertiary"):
-                st.session_state.language = code
-                st.rerun()
-
-    with columns[7]:
+    with columns[4]:
         if st.session_state.section == "discover" and st.session_state.view == "home":
             if st.button(t("cta_start", lang), key="header_cta",
                          type="primary", use_container_width=True):
@@ -667,10 +692,6 @@ def render_nav_bar() -> None:
                 start_over()
     st.markdown('</div>', unsafe_allow_html=True)
 
-
-# Three language modes (P2-1). Each button is labelled in its own mode, so a
-# reader who cannot read the other two can still find theirs.
-LANGUAGE_BUTTONS = {"en": "EN", "ur": "اردو", "ur_roman": "Roman"}
 
 render_header()
 render_nav_bar()

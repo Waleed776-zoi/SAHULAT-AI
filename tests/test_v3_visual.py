@@ -309,5 +309,86 @@ class TestHeroRotation(unittest.TestCase):
         self.assertIn(".sa-preview-dots { display: none !important; }", block)
 
 
+class TestLanguagePicker(unittest.TestCase):
+    """
+    Language moved into the brand bar as one dropdown.
+
+    Three always-visible buttons took three of the eight slots on the row that
+    carries the navigation, for a setting most people touch once. The property
+    that made them worth having is the one these tests protect: every option is
+    written in its own script, so a reader who cannot read the other two can
+    still recognise theirs.
+    """
+
+    def test_the_picker_is_in_the_brand_bar(self):
+        app = launch()
+        pickers = [s for s in app.selectbox if s.key == "lang_picker"]
+        self.assertTrue(pickers, "no language picker")
+        body = " ".join(str(m.value) for m in app.markdown)
+        self.assertIn('class="sa-brandbar"', body)
+
+    def test_every_language_is_offered(self):
+        app = launch()
+        picker = app.selectbox(key="lang_picker")
+        self.assertEqual(len(picker.options), len(LANGUAGES))
+
+    def test_each_option_is_written_in_its_own_script(self):
+        """
+        The reason the buttons were always visible. In a menu it survives
+        through the labels themselves: someone who reads only Urdu opens the
+        picker and sees اردو, not "Urdu".
+        """
+        from core.i18n import LANGUAGE_NAMES
+        app = launch()
+        options = app.selectbox(key="lang_picker").options
+        self.assertIn(LANGUAGE_NAMES["ur"], options)
+        self.assertNotEqual(LANGUAGE_NAMES["ur"], "Urdu",
+                            "the Urdu option is labelled in English")
+
+    def test_choosing_a_language_changes_the_page(self):
+        for code in LANGUAGES:
+            app = launch()
+            app.selectbox(key="lang_picker").set_value(code).run()
+            self.assertFalse(app.exception, f"{code}: {app.exception}")
+            self.assertEqual(app.session_state["language"], code)
+            label = [b.label for b in app.button if b.key == "section_discover"]
+            self.assertEqual(label, [t("nav_discover", code)],
+                             f"{code}: the page did not follow the picker")
+
+    def test_the_nav_row_no_longer_carries_language_buttons(self):
+        app = launch()
+        keys = {b.key for b in app.button if b.key}
+        for code in LANGUAGES:
+            self.assertNotIn(f"lang_{code}", keys,
+                             "a language button is back on the navigation row")
+
+    def test_the_nav_row_is_screens_and_one_action(self):
+        app = launch()
+        keys = [b.key for b in app.button
+                if b.key and (b.key.startswith("section_") or b.key.startswith("header_"))]
+        self.assertEqual(sorted(keys),
+                         ["header_cta", "section_discover", "section_how", "section_read"])
+
+    def test_the_bar_is_styled_by_what_it_contains(self):
+        """
+        `:has(.sa-brandbar)` rather than a positional selector. Streamlit
+        rearranging its wrappers would silently unstyle a header matched by
+        position, and an unstyled header looks like a rendering bug.
+        """
+        css = io.open(os.path.join(ROOT, "styles", "components.css"),
+                      encoding="utf-8").read()
+        self.assertIn(':has(.sa-brandbar)', css)
+
+    def test_the_picker_survives_a_language_the_app_does_not_know(self):
+        """
+        Stale session state must not crash the header - it is the first thing
+        rendered, so an exception there takes the whole page with it.
+        """
+        app = AppTest.from_file(APP, default_timeout=180)
+        app.session_state["language"] = "fr"
+        app.run()
+        self.assertFalse(app.exception, str(app.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

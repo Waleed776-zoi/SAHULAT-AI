@@ -640,6 +640,7 @@ ROMAN: Dict[str, str] = {
     "footer_tagline": "Mauqon tak rasai, aasan tareeqe se.",
     "footer_trust": "Bharosa",
     "footer_language": "Zubaan",
+    "language_help": "Poore safhe ki zaban tabdeel karein.",
     "footer_built": "Pakistan ke liye banaya gaya",
     "footer_disclaimer": "Sirf maloomati rehnumai. Sahulat AI koi sarkari eligibility faisla nahi "
                          "karta, shanakht ki tasdeeq nahi karta, aur aap ki taraf se darkhwast "

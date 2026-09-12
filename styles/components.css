@@ -2,24 +2,42 @@
    Sahulat AI — components
    =========================================================================== */
 
-/* ---------- Header: a distinct navigation layer ---------- */
-.sahulat-header {
+/* ---------- Brand bar: identity one side, language the other ----------
+   Matched by what it CONTAINS rather than by where it sits, so Streamlit
+   rearranging its wrappers cannot silently unstyle the header. The bar is a
+   real columns row because the language picker is a widget, and a widget
+   cannot be nested inside a markdown string. */
+[data-testid="stHorizontalBlock"]:has(.sa-brandbar) {
   background: rgba(255,255,255,.92);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
   border-radius: var(--radius-md) var(--radius-md) 0 0;
-  padding: var(--s4) var(--s5);
+  padding: var(--s3) var(--s5);
   margin-bottom: var(--s6);
+  align-items: center;
 }
-.sahulat-header-inner {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: var(--s5); flex-wrap: wrap;
+.sa-brandbar { display: flex; align-items: baseline; gap: var(--s3); }
+
+/* The picker is a setting, not an action: it should read as quiet chrome
+   rather than compete with the primary call to action below it. */
+[data-testid="stHorizontalBlock"]:has(.sa-brandbar) [data-baseweb="select"] > div {
+  background: transparent; border-color: transparent;
+  min-height: 38px; font-size: .86rem; font-weight: 600;
 }
+[data-testid="stHorizontalBlock"]:has(.sa-brandbar) [data-baseweb="select"] > div:hover {
+  background: var(--surface-soft); border-color: var(--border);
+}
+[data-testid="stHorizontalBlock"]:has(.sa-brandbar) [data-testid="stWidgetLabel"] {
+  display: none;
+}
+
 .sahulat-logo { display: flex; align-items: baseline; gap: var(--s3); }
+.sa-brandbar .sahulat-logo-mark,
 .sahulat-logo-mark {
   width: 26px; height: 26px; flex: 0 0 auto; align-self: center;
   transition: transform var(--motion-normal) var(--ease);
 }
+.sa-brandbar:hover .sahulat-logo-mark,
 .sahulat-logo:hover .sahulat-logo-mark { transform: translateY(-2px); }
 .sahulat-logo-name {
   font-family: var(--sa-font-display); font-size: 1.3rem; font-weight: 700;
@@ -738,7 +756,9 @@ div[data-testid="stExpander"] summary { font-weight: 600; font-size: .92rem; }
   .sa-steplabel { display: none; }
   .sa-stepitem { flex: 0 0 auto; }
   .sa-inline-trust { gap: var(--s3); }
-  .sahulat-header { padding: var(--s3) var(--s4); }
+  [data-testid="stHorizontalBlock"]:has(.sa-brandbar) {
+    padding: var(--s3) var(--s4); margin-bottom: var(--s5);
+  }
   .sahulat-category:hover { transform: translateY(-2px); }
   .sahulat-path { display: none; }
   .sahulat-path-mobile { display: block; }

@@ -1019,6 +1019,8 @@ STRINGS: Dict[str, Dict[str, str]] = {
                        "ur": "مواقع کی تلاش، آسان بنائی گئی۔"},
     "footer_trust": {"en": "Trust", "ur": "اعتماد"},
     "footer_language": {"en": "Language", "ur": "زبان"},
+    "language_help": {"en": "Change the language of the whole page.",
+                      "ur": "پورے صفحے کی زبان تبدیل کریں۔"},
     "footer_built": {"en": "Built for Pakistan", "ur": "پاکستان کے لیے بنایا گیا"},
     "footer_disclaimer": {
         "en": "Informational guidance only. Sahulat AI does not make official "
