@@ -1,285 +1,396 @@
+# -*- coding: utf-8 -*-
 """
-The logo, and the things about it that break silently.
+The brand: the supplied artwork, its generated assets, and how the app uses it.
 
-A brand system rots in a particular way: someone adjusts the mark in the
-header, the favicon and the exported files keep the old drawing, and nobody
-notices for months because no page shows two of them at once. So the first
-test here is the anti-drift one - everything in assets/ must still be exactly
-what core.brand emits.
-
-The rest guard properties that a screenshot cannot: that the mark survives one
-ink, that the drawn stroke length matches the dash length the animation uses,
-and that the artwork stays inside its own clear space.
+The headline guard is `test_no_file_has_drifted_from_the_build`. A brand rots
+in one specific way - someone touches one file by hand, the rest keep the old
+drawing, and nobody notices for months because no single page shows two of
+them at once. Regenerating every variant in memory and comparing bytes makes
+that impossible to do quietly.
 """
 from __future__ import annotations
 
+import base64
+import importlib.util
 import io
-import math
-import os
-import re
+import sys
 import unittest
+from pathlib import Path
 
-from core import brand
+import numpy as np
+from PIL import Image
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ASSETS = os.path.join(ROOT, "assets")
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
-
-def _read(name: str) -> str:
-    with io.open(os.path.join(ASSETS, name), encoding="utf-8") as handle:
-        return handle.read()
-
-
-def _read_root(*parts: str) -> str:
-    with io.open(os.path.join(ROOT, *parts), encoding="utf-8") as handle:
-        return handle.read()
+from core import brand  # noqa: E402
 
 
-class TestExportedFilesMatchTheCode(unittest.TestCase):
-    """assets/ is generated, never hand-edited."""
+def _load_build():
+    spec = importlib.util.spec_from_file_location(
+        "prepare_logo", ROOT / "scripts" / "prepare_logo.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+build = _load_build()
+
+
+def _rebuild_in_memory():
+    """Everything scripts/prepare_logo.py writes, without writing anything."""
+    original = Image.open(build.SOURCE).convert("RGB")
+    rgb = np.asarray(original).astype(float)
+    plate = build.plate_colour(rgb)
+    angle = build.skew_degrees(rgb)
+    art = build.tight(build.drop_residue(
+        build.to_rgba(build.deskew(original, plate, angle), plate)))
+    symbol, lockup, art = build.cut(art)
+
+    full_height = min(320, art.shape[0])
+    made = {
+        "logo-lockup@2x.png": (build.resize_to_height(lockup, 92), True),
+        "logo-lockup.png": (build.resize_to_height(lockup, 46), True),
+        "logo-full@2x.png": (build.resize_to_height(art, full_height), False),
+        "logo-full.png": (build.resize_to_height(art, full_height // 2), False),
+        "logo-symbol@2x.png": (build.resize_to_height(symbol, 128), True),
+        "logo-symbol.png": (build.resize_to_height(symbol, 64), True),
+    }
+    for size in (32, 64, 180, 192):
+        made[f"icon-{size}.png"] = (build.square_icon(symbol, size), False)
+
+    out = {}
+    for name, (image, inline) in made.items():
+        if inline:
+            image = image.quantize(colors=128, method=Image.FASTOCTREE)
+        buffer = io.BytesIO()
+        image.save(buffer, "PNG", optimize=True)
+        out[name] = buffer.getvalue()
+    return out
+
+
+class SourceArtwork(unittest.TestCase):
+
+    def test_the_master_artwork_is_in_the_repository(self):
+        """Without it nothing downstream can be rebuilt or corrected."""
+        self.assertTrue(brand.SOURCE.exists(), f"missing {brand.SOURCE}")
+
+    def test_the_master_is_the_high_resolution_export(self):
+        """
+        A screenshot of the design was the only file available at first. It
+        works, but every icon is sharper from the real export, so the master
+        must not quietly regress to the smaller one.
+        """
+        self.assertGreaterEqual(min(Image.open(brand.SOURCE).size), 1200)
+
+    def test_the_master_is_left_alone_because_it_is_straight(self):
+        """
+        The current master is a clean export. Reporting any rotation for it
+        would mean resampling straight artwork into crookedness.
+        """
+        rgb = np.asarray(Image.open(brand.SOURCE).convert("RGB")).astype(float)
+        self.assertEqual(build.skew_degrees(rgb), 0.0)
+
+    def test_a_tilted_source_is_still_measured_and_corrected(self):
+        """
+        The earlier artwork was a screenshot, rotated about 1.4 degrees. The
+        detector has to keep working on that: the guards added for the clean
+        export must not have turned it into a no-op.
+        """
+        tilted = brand.SOURCE.parent / "sahulat-logo-alt-stacked.png"
+        if not tilted.exists():
+            self.skipTest("the tilted variant is not kept in this checkout")
+        rgb = np.asarray(Image.open(tilted).convert("RGB")).astype(float)
+        self.assertAlmostEqual(build.skew_degrees(rgb), -1.41, places=1)
+
+    def test_a_curved_edge_is_not_mistaken_for_a_baseline(self):
+        """
+        Measured across the whole width, the ribbon's underside fits a line at
+        -7.7 degrees on artwork that is perfectly straight. Acting on that
+        would rotate a clean logo into a crooked one, which is why the fit is
+        rejected unless the points really lie on a line.
+        """
+        curved = Image.new("RGB", (600, 300), (255, 255, 255))
+        pixels = curved.load()
+        for x in range(40, 560):
+            y = int(240 - 90 * np.sin(np.pi * (x - 40) / 520))
+            for dy in range(10):
+                pixels[x, y + dy] = (20, 120, 70)
+        self.assertEqual(build.skew_degrees(np.asarray(curved).astype(float)), 0.0)
+
+    def test_straight_artwork_would_not_be_rotated(self):
+        """A clean source must pass through the deskew untouched."""
+        straight = Image.new("RGB", (400, 200), (250, 251, 253))
+        for x in range(40, 360, 6):
+            for y in range(150, 160):
+                straight.putpixel((x, y), (20, 30, 40))
+        angle = build.skew_degrees(np.asarray(straight).astype(float))
+        self.assertAlmostEqual(angle, 0.0, places=6)
+
+
+class GeneratedAssets(unittest.TestCase):
 
     def test_every_declared_export_exists(self):
+        self.assertEqual(brand.missing(), [],
+                         "run: python scripts/prepare_logo.py")
+
+    def test_no_file_has_drifted_from_the_build(self):
+        """
+        Each committed asset is byte-identical to what the script produces.
+
+        This is the test that makes the whole arrangement trustworthy: it
+        catches a hand-edited file, a stale asset left behind by a changed
+        source, and a build parameter changed without regenerating.
+        """
+        rebuilt = _rebuild_in_memory()
+        self.assertEqual(sorted(rebuilt), sorted(brand.EXPORTS),
+                         "the build and core.brand.EXPORTS disagree")
         for name in brand.EXPORTS:
-            self.assertTrue(os.path.exists(os.path.join(ASSETS, name)),
-                            f"{name} is declared but not exported")
+            with self.subTest(name):
+                on_disk = (brand.BRAND / name).read_bytes()
+                self.assertEqual(on_disk, rebuilt[name],
+                                 f"{name} differs from scripts/prepare_logo.py "
+                                 f"- re-run it rather than editing the file")
 
-    def test_no_file_has_drifted_from_the_generator(self):
+    def test_the_brand_folder_holds_nothing_else(self):
+        stray = sorted(p.name for p in brand.BRAND.iterdir()
+                       if p.name not in brand.EXPORTS)
+        self.assertEqual(stray, [], "unexpected files in assets/brand/")
+
+    def test_the_placeholder_mark_is_gone(self):
         """
-        The failure this file exists for. If this breaks, someone edited an
-        SVG by hand or changed the geometry without re-running the export -
-        and the header, the favicon and the press kit are now three different
-        logos.
+        The drawn mark this project used before the logo arrived must not
+        still be sitting in the repository. Two logos is the rot.
         """
-        for name, build in brand.EXPORTS.items():
-            self.assertEqual(_read(name).strip(), build().strip(),
-                             f"{name} no longer matches core.brand - "
-                             f"run core.brand.write_exports()")
-
-    def test_the_assets_folder_holds_nothing_else(self):
-        stray = {f for f in os.listdir(ASSETS) if f.endswith(".svg")} - set(brand.EXPORTS)
-        self.assertFalse(stray, f"ungenerated SVGs in assets/: {stray}")
+        leftovers = sorted(p.name for p in (ROOT / "assets").rglob("sahulat-logo-*.svg"))
+        self.assertEqual(leftovers, [])
+        self.assertFalse((ROOT / "assets" / "sahulat-favicon.svg").exists())
 
 
-class TestTheMarkSurvivesOneInk(unittest.TestCase):
-    """
-    Hierarchy must be carried by size, never by colour (guide section 6).
-    """
+class Transparency(unittest.TestCase):
+    """The supplied file had no alpha and a near-white plate, not white."""
 
-    def test_the_web_mark_is_drawn_in_currentcolor(self):
+    def test_every_asset_carries_real_transparency(self):
         """
-        One drawing, not four. Monochrome, reversed, grayscale and dark mode
-        all become a property of where the mark is placed.
+        Mode is not the thing to assert: the two inlined files are palette
+        PNGs, which carry transparency in a tRNS chunk rather than a channel.
+        What matters is that it survives being read back.
         """
-        svg = brand.mark_svg()
-        self.assertIn('stroke="currentColor"', svg)
-        self.assertIn('fill="currentColor"', svg)
-        self.assertNotIn("#", svg, "the web mark hardcodes a colour")
+        for name in brand.EXPORTS:
+            with self.subTest(name):
+                image = Image.open(brand.BRAND / name)
+                self.assertTrue(image.mode == "RGBA" or "transparency" in image.info,
+                                f"{name} has no transparency at all")
+                self.assertLess(int(np.asarray(image.convert("RGBA"))[..., 3].min()), 8)
 
-    def test_the_symbol_carries_no_gold(self):
+    def test_quantising_did_not_flatten_the_edges(self):
         """
-        The guide offers gold as optional and requires the mark to work
-        without it. Drawn, the accent was a floating crescent that turned to
-        mush below 32px - so it lives on the Urdu wordmark instead.
+        Palette-reducing the inlined files could have left one on/off
+        transparent index, which would hard-edge every curve in the ribbon and
+        every stem of the type. Graded alpha is what keeps them smooth.
         """
-        self.assertNotIn(brand.GOLD, brand.mark_svg())
-        self.assertNotIn(brand.GOLD, brand.symbol_file())
-        self.assertNotIn(brand.GOLD, brand.favicon_svg())
+        for name in brand.INLINED:
+            with self.subTest(name):
+                alpha = np.asarray(Image.open(brand.BRAND / name).convert("RGBA"))[..., 3]
+                self.assertGreater(len(np.unique(alpha)), 16,
+                                   f"{name} lost its anti-aliasing")
 
-    def test_gold_still_has_a_home_in_the_lockup(self):
-        self.assertIn(brand.GOLD, brand.lockup_premium())
-
-    def test_the_monochrome_version_is_genuinely_one_colour(self):
-        colours = set(re.findall(r'#[0-9A-Fa-f]{6}', _read("sahulat-logo-monochrome.svg")))
-        self.assertEqual(colours, {brand.INK}, f"more than one ink: {colours}")
-
-    def test_the_reversed_version_is_genuinely_one_colour(self):
-        colours = set(re.findall(r'#[0-9A-Fa-f]{6}', _read("sahulat-logo-reversed.svg")))
-        self.assertEqual(colours, {"#FFFFFF"}, f"not purely reversed: {colours}")
-
-    def test_the_destination_reads_without_colour(self):
+    def test_no_asset_kept_its_background_plate(self):
         """
-        The point must be wider than the stroke, or flattening to one ink
-        turns the destination into a thicker bit of line.
+        The corners must be fully transparent. If the plate survived, the logo
+        renders as a pale rectangle on the app's warm paper canvas - which is
+        exactly the failure that is invisible on a white mockup.
         """
-        self.assertGreater(brand.POINT_R * 2, brand.STROKE * 1.6)
+        for name in brand.EXPORTS:
+            with self.subTest(name):
+                alpha = np.asarray(Image.open(brand.BRAND / name).convert("RGBA"))[..., 3]
+                corners = [alpha[0, 0], alpha[0, -1], alpha[-1, 0], alpha[-1, -1]]
+                self.assertEqual(max(int(c) for c in corners), 0)
 
+    def test_the_artwork_reaches_the_edges_of_its_own_box(self):
+        """Tightly cropped: no dead transparent margin around the lockup."""
+        for name in ("logo-lockup@2x.png", "logo-full@2x.png", "logo-symbol@2x.png"):
+            with self.subTest(name):
+                alpha = np.asarray(Image.open(brand.BRAND / name).convert("RGBA"))[..., 3]
+                self.assertTrue(alpha[0].max() > 0 or alpha[-1].max() > 0)
+                self.assertTrue(alpha[:, 0].max() > 0 or alpha[:, -1].max() > 0)
 
-class TestGeometry(unittest.TestCase):
-    """Properties of the drawing that a rendered screenshot would not catch."""
-
-    CURVES = (((6.2, 20.4), (6, 26.4), (12, 27.2), (15.2, 22.4)),
-              ((15.2, 22.4), (18.4, 17.6), (18.8, 12.4), (21.2, 10.4)))
-
-    def test_the_path_in_the_module_matches_the_curves_tested_here(self):
-        numbers = [float(n) for n in re.findall(r'-?\d+\.?\d*', brand.PATH)]
-        expected = [v for curve in self.CURVES for point in curve[1:] for v in point]
-        expected = list(self.CURVES[0][0]) + expected
-        self.assertEqual(numbers, expected,
-                         "PATH and the curves in this test have diverged")
-
-    def test_the_two_curves_join_smoothly(self):
+    def test_the_tagline_stayed_opaque(self):
         """
-        The mark is one continuous stroke. That is only true if the outgoing
-        control vector of the first curve equals the incoming vector of the
-        second - otherwise there is a visible kink at the join.
+        Keying out the white would have left the grey tagline half
+        transparent, because it is closer to the background than the rest.
+        Un-compositing from the known plate is what avoids that.
         """
-        first, second = self.CURVES
-        self.assertEqual(first[3], second[0], "the curves do not even meet")
-        out_v = (first[3][0] - first[2][0], first[3][1] - first[2][1])
-        in_v = (second[1][0] - second[0][0], second[1][1] - second[0][1])
-        for a, b in zip(out_v, in_v):
-            self.assertAlmostEqual(a, b, places=6,
-                                   msg="a kink at the join breaks the stroke")
+        image = Image.open(brand.BRAND / "logo-full@2x.png").convert("RGBA")
+        alpha = np.asarray(image)[..., 3]
+        tagline = alpha[int(alpha.shape[0] * 0.86):]
+        self.assertGreater(int(tagline.max()), 250)
 
-    def _points(self):
-        for curve in self.CURVES:
-            for i in range(401):
-                t = i / 400
-                u = 1 - t
-                yield (u**3*curve[0][0] + 3*u*u*t*curve[1][0]
-                       + 3*u*t*t*curve[2][0] + t**3*curve[3][0],
-                       u**3*curve[0][1] + 3*u*u*t*curve[1][1]
-                       + 3*u*t*t*curve[2][1] + t**3*curve[3][1])
 
-    def test_the_artwork_stays_inside_its_clear_space(self):
+class Icons(unittest.TestCase):
+
+    def test_icons_are_square(self):
+        for size in (32, 64, 180, 192):
+            with self.subTest(size):
+                image = Image.open(brand.BRAND / f"icon-{size}.png")
+                self.assertEqual(image.size, (size, size))
+
+    def test_icons_keep_clear_space_around_the_symbol(self):
+        """An icon crammed to its own edge looks wrong beside every other."""
+        for size in (64, 180, 192):
+            with self.subTest(size):
+                alpha = np.asarray(Image.open(brand.BRAND / f"icon-{size}.png"))[..., 3]
+                rows = np.where((alpha > 8).any(1))[0]
+                cols = np.where((alpha > 8).any(0))[0]
+                margin = min(rows.min(), cols.min(),
+                             size - 1 - rows.max(), size - 1 - cols.max())
+                self.assertGreaterEqual(int(margin), 2)
+
+    def test_the_symbol_survives_on_a_dark_surface(self):
         """
-        The 4-unit margin is also the clear-space rule (section 10). Artwork
-        crossing it means the logo touches whatever sits beside it.
+        The green ribbon is the part that may sit on deep green. The full
+        lockup may not - its wordmark is navy - which is why the footer uses
+        the symbol and core.brand records DARK_SAFE.
         """
-        cap = brand.STROKE / 2
-        low, high = brand.MARGIN, brand.VIEWBOX - brand.MARGIN
-        for x, y in self._points():
-            self.assertGreaterEqual(x - cap, low - .05, "stroke crosses the left margin")
-            self.assertLessEqual(x + cap, high + .05, "stroke crosses the right margin")
-            self.assertGreaterEqual(y - cap, low - .05, "stroke crosses the top margin")
-            self.assertLessEqual(y + cap, high + .05, "stroke crosses the bottom margin")
+        image = Image.open(brand.BRAND / "icon-64.png").convert("RGBA")
+        art = np.asarray(image).astype(float)
+        opaque = art[..., 3] > 200
+        self.assertTrue(opaque.any())
+        lit = art[..., :3][opaque].mean(1)
+        deep_green_luma = 0.2126 * 0x12 + 0.7152 * 0x3B + 0.0722 * 0x32
+        self.assertGreater(float(lit.mean()), deep_green_luma + 20)
 
-        px, py = brand.POINT
-        self.assertLessEqual(px + brand.POINT_R, high + .05)
-        self.assertGreaterEqual(py - brand.POINT_R, low - .05)
+    def test_the_lockup_is_not_listed_as_dark_safe(self):
+        self.assertNotIn(brand.LOCKUP, brand.DARK_SAFE)
+        self.assertIn(brand.SYMBOL, brand.DARK_SAFE)
 
-    def test_the_point_meets_the_end_of_the_stroke(self):
+
+class Serving(unittest.TestCase):
+
+    def test_the_data_uri_is_a_real_png(self):
+        uri = brand.data_uri(brand.LOCKUP)
+        self.assertTrue(uri.startswith("data:image/png;base64,"))
+        raw = base64.b64decode(uri.split(",", 1)[1])
+        self.assertEqual(raw[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(raw, brand.LOCKUP.read_bytes())
+
+    def test_the_data_uri_is_built_once(self):
+        brand.data_uri.cache_clear()
+        brand.data_uri(brand.LOCKUP)
+        brand.data_uri(brand.LOCKUP)
+        self.assertEqual(brand.data_uri.cache_info().hits, 1)
+
+    def test_inlined_assets_stay_inside_their_budget(self):
         """
-        A gap reads as a broken line; a point sitting on the tip reads as a
-        lollipop. It should just touch.
+        These ship in the page HTML on every rerun, so their size is paid per
+        interaction rather than once. Quantising keeps them small; this stops
+        a future change quietly making every click heavier.
         """
-        tip = (21.2, 10.4)
-        gap = math.dist(tip, brand.POINT) - brand.POINT_R - brand.STROKE / 2
-        self.assertLess(gap, 0, "the destination point is detached")
-        self.assertGreater(gap, -2.0, "the point has swallowed the stroke")
+        for name in brand.INLINED:
+            with self.subTest(name):
+                size = (brand.BRAND / name).stat().st_size
+                self.assertLess(size, brand.INLINE_BUDGET_BYTES,
+                                f"{name} is {size} bytes and is inlined on every rerun")
 
-    def test_the_dash_length_matches_the_real_stroke_length(self):
+    def test_the_height_is_set_but_never_the_width(self):
         """
-        The draw animation uses stroke-dasharray: 27. If the path is longer
-        the stroke never finishes drawing; if much shorter the animation ends
-        early and the last stretch appears instantly.
+        Setting both would let a change to one stretch the artwork. Height
+        alone plus the intrinsic ratio cannot distort it.
         """
-        total = 0.0
-        previous = None
-        for point in self._points():
-            if previous is not None and previous != point:
-                total += math.dist(previous, point)
-            previous = point
-        css = _read_root("styles", "animations.css")
-        # Two rules share this selector: the animation and the reduced-motion
-        # override that sets `dasharray: none`. Take the numeric one.
-        lengths = [int(m) for m in re.findall(
-            r'\.sa-logo-path\.is-drawn\s*\{[^}]*?stroke-dasharray:\s*(\d+)', css)]
-        self.assertEqual(len(lengths), 1,
-                         f"expected exactly one numeric dasharray, found {lengths}")
-        declared = float(lengths[0])
-        self.assertGreaterEqual(declared, total,
-                                f"dasharray {declared} < path length {total:.2f}")
-        self.assertLess(declared - total, 2.0,
-                        f"dasharray {declared} overshoots path length {total:.2f}")
+        markup = brand.lockup_html(height=46)
+        self.assertIn('height="46"', markup)
+        self.assertNotIn("width=", markup)
+
+    def test_a_logo_standing_alone_is_labelled(self):
+        self.assertIn('alt="Sahulat AI"', brand.lockup_html())
+
+    def test_a_logo_beside_the_name_is_hidden_from_screen_readers(self):
+        """Announcing "Sahulat AI logo, Sahulat AI" is noise, not access."""
+        markup = brand.symbol_html()
+        self.assertIn('aria-hidden="true"', markup)
+        self.assertIn('alt=""', markup)
+
+    def test_the_page_icon_resolves_to_a_real_file(self):
+        icon = brand.page_icon()
+        self.assertIsNotNone(icon)
+        self.assertTrue(Path(icon).exists())
 
 
-class TestAccessibilityAndLockups(unittest.TestCase):
+class Colours(unittest.TestCase):
 
-    def test_the_mark_beside_a_wordmark_is_hidden_from_screen_readers(self):
-        """Otherwise the product name is announced twice."""
-        self.assertIn('aria-hidden="true"', brand.mark_svg())
+    def test_recorded_colours_are_valid_hex(self):
+        for name in ("RIBBON", "RIBBON_LIGHT", "RIBBON_DARK",
+                     "WORDMARK", "URDU", "ACCENT", "TAGLINE"):
+            with self.subTest(name):
+                value = getattr(brand, name)
+                self.assertRegex(value, r"^#[0-9A-F]{6}$")
 
-    def test_the_mark_standing_alone_is_labelled(self):
-        svg = brand.mark_svg(title="Sahulat AI")
-        self.assertIn("<title>Sahulat AI</title>", svg)
-        self.assertNotIn('aria-hidden', svg)
-
-    def test_every_lockup_carries_the_mark(self):
-        for build in (brand.lockup_primary, brand.lockup_compact,
-                      brand.lockup_urdu_first, brand.lockup_stacked):
-            self.assertIn(brand.PATH, build(), build.__name__)
-
-    def test_the_bilingual_lockups_carry_both_wordmarks(self):
-        for build in (brand.lockup_primary, brand.lockup_stacked):
-            svg = build()
-            self.assertIn("Sahulat AI", svg, build.__name__)
-            self.assertIn("سہولت", svg, build.__name__)
-
-    def test_urdu_first_leads_with_urdu_and_drops_the_latin(self):
+    def test_the_recorded_colours_are_actually_in_the_artwork(self):
         """
-        "Do not make the Urdu wordmark look like a decorative afterthought."
-        The Urdu-first lockup is the one that proves Urdu can stand alone.
+        Measured from the file, not chosen by eye - so this asserts each one
+        is close to something really present rather than merely plausible.
         """
-        svg = brand.lockup_urdu_first()
-        self.assertIn("سہولت", svg)
-        self.assertNotIn("Sahulat AI</text>", svg)
+        art = np.asarray(Image.open(brand.BRAND / "logo-full@2x.png").convert("RGBA"))
+        opaque = art[..., :3][art[..., 3] > 230].astype(int)
+        for name in ("RIBBON", "WORDMARK", "URDU", "ACCENT", "TAGLINE"):
+            with self.subTest(name):
+                target = np.array([int(getattr(brand, name)[i:i + 2], 16)
+                                   for i in (1, 3, 5)])
+                nearest = np.abs(opaque - target).sum(1).min()
+                self.assertLess(int(nearest), 30,
+                                f"{name} is not a colour in the artwork")
 
-    def test_the_urdu_is_set_right_to_left(self):
-        self.assertIn('direction="rtl"', brand.lockup_primary())
 
-    def test_the_favicon_is_the_small_size_build(self):
+class AppWiring(unittest.TestCase):
+
+    APP = (ROOT / "app.py").read_text(encoding="utf-8")
+    COMPONENTS = (ROOT / "styles" / "components.css").read_text(encoding="utf-8")
+    ANIMATIONS = (ROOT / "styles" / "animations.css").read_text(encoding="utf-8")
+
+    def test_the_app_takes_the_logo_from_the_brand_module(self):
+        self.assertIn("from core.brand import", self.APP)
+        self.assertIn("lockup_html", self.APP)
+
+    def test_no_asset_path_is_spelled_out_in_the_app(self):
         """
-        At 16px the normal stroke lands near one device pixel and renders as
-        grey. The favicon thickens it.
+        One place resolves paths, so one place has to change. Prose in a
+        docstring may name the folder; a string literal naming a file is the
+        thing that goes stale.
         """
-        favicon = brand.favicon_svg()
-        declared = float(re.search(r'stroke-width="([\d.]+)"', favicon).group(1))
-        self.assertGreater(declared, brand.STROKE)
-        self.assertIn(brand.PATH, favicon, "the favicon is a different drawing")
+        for quote in ('"', "'"):
+            self.assertNotIn(f".png{quote}", self.APP)
+            self.assertNotIn(f"{quote}assets", self.APP)
 
+    def test_the_tab_icon_is_wired_up(self):
+        self.assertIn("page_icon=page_icon()", self.APP)
 
-class TestTheAppUsesIt(unittest.TestCase):
+    def test_the_header_does_not_repeat_the_name_beside_the_logo(self):
+        """The artwork already contains it, in both scripts."""
+        self.assertNotIn("sahulat-logo-name", self.APP)
+        self.assertNotIn("sahulat-logo-name", self.COMPONENTS)
 
-    APP = _read_root("app.py")
+    def test_the_footer_uses_the_symbol_not_the_lockup(self):
+        """The footer is a dark surface; the navy wordmark disappears there."""
+        footer = self.APP.split("def render_footer")[1].split("def render_home")[0]
+        self.assertIn("symbol_html", footer)
+        self.assertNotIn("lockup_html", footer)
 
-    def test_the_app_draws_the_mark_from_the_brand_module(self):
-        self.assertIn("from core.brand import mark_svg", self.APP)
+    def test_the_reveal_plays_once_per_session(self):
+        self.assertIn('logo_mark(animate=should_animate("logo"))', self.APP)
+        self.assertIn("is-new", self.APP)
 
-    def test_no_logo_geometry_is_inlined_in_the_app(self):
-        """
-        The old mark was an SVG string in app.py. That is how drift starts.
+    def test_reduced_motion_leaves_the_logo_present(self):
+        block = self.ANIMATIONS.split("prefers-reduced-motion")[1]
+        self.assertIn(".sahulat-logo.is-new", block)
+        self.assertIn("opacity: 1 !important", block)
 
-        Note 24x24 viewBoxes are fine here - that is the category-icon grid.
-        What must not come back is the logo's own geometry.
-        """
-        self.assertNotIn("LOGO_MARK", self.APP)
-        self.assertNotIn("M3 20 C 9 20", self.APP, "the old mark path is back")
-        self.assertNotIn("sahulat-logo-mark\" viewBox", self.APP,
-                         "the mark is being built in app.py again")
-
-    def test_the_favicon_is_wired_up(self):
-        self.assertIn("page_icon", self.APP)
-        self.assertIn("sahulat-favicon.svg", self.APP)
-
-    def test_the_draw_animation_plays_once_per_session(self):
-        """
-        "Do not replay it on every Streamlit rerun." should_animate() is what
-        already tracks that, so the mark asks it rather than inventing a
-        second mechanism.
-        """
-        self.assertIn('should_animate("logo")', self.APP)
-
-    def test_reduced_motion_leaves_the_logo_drawn(self):
-        """
-        Left to the blanket 1ms rule, the dash offset would animate in a
-        flicker and the point would pop. Under reduced motion the mark is
-        simply present.
-        """
-        css = _read_root("styles", "animations.css")
-        block = css[css.index("prefers-reduced-motion"):]
-        self.assertIn("stroke-dasharray: none !important", block)
-        self.assertIn(".sa-logo-path.is-drawn ~ .sa-logo-point", block)
+    def test_nothing_still_refers_to_the_placeholder_mark(self):
+        for stale in ("mark_svg", "sa-logo-path", "sahulat-logo-mark",
+                      "sahulat-favicon.svg"):
+            with self.subTest(stale):
+                self.assertNotIn(stale, self.APP)
+                self.assertNotIn(stale, self.COMPONENTS)
+                self.assertNotIn(stale, self.ANIMATIONS)
 
 
 if __name__ == "__main__":

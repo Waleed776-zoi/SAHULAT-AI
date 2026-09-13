@@ -117,6 +117,7 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | UI-05 | Hero preview cycles through one real result per category | `app.py` + CSS | **P2** | **DONE** | Waleed |
 | UI-06 | Language moves into the brand bar as one picker | `app.py` + CSS | **P2** | **DONE** | Waleed |
 | BRAND-01 | The mark read as a dumbbell; no logo system existed | `core/brand.py`, `assets/` | **P2** | **DONE** | Waleed |
+| BRAND-02 | The real logo arrived; the placeholder mark had to go | `core/brand.py`, `scripts/prepare_logo.py`, `assets/` | **P2** | **DONE** | Waleed |
 | BUG-03 | Zero income / zero marks silently become "not provided" | `app.py` | **P1** | **DONE** | — |
 | BUG-04 | Expired deadline reported as user ineligibility | `rules_engine.py` | **P1** | **DONE** | — |
 | I18N-01 | `name_ur` / `summary_ur` exist in data but are never displayed | `app.py` | **P1** | **DONE** | — |
@@ -563,6 +564,28 @@ not an oversight: outlining is a design-tool step.
 - [x] Favicon wired; no logo geometry left inlined in `app.py`.
 
 ---
+
+---
+
+#### BRAND-02 — The supplied logo replaces the placeholder mark
+
+**Area:** `core/brand.py`, `scripts/prepare_logo.py`, `assets/` · **Priority:** P2 · **Status:** **DONE** · **Owner:** Waleed
+
+Waleed supplied the real logo: a green ribbon **S** with a four-pointed spark, the name in Latin and Urdu, and the line *More Opportunities. Easier Access.* It replaces the mark drawn under BRAND-01, which existed only because the project had no logo at the time.
+
+**What was wrong with the files, none of it visible at a glance.** The first artwork supplied was a screenshot of the design: rotated 1.33 degrees, on a #FAFBFD plate rather than white, no alpha channel. Waleed then supplied the real 2000px export, which is straight and on pure white but still has no alpha — placed as supplied either would have rendered as a pale rectangle on the warm paper canvas, a defect invisible on a white mockup and obvious in the app. The export is now the master; the screenshot is kept as `sahulat-logo-alt-stacked.png` because it is a **different arrangement**, not a worse file: it sets the Urdu below the Latin rather than overlapping it, and reads `Sahulat AI` rather than `Sahulat.AI`. Switching is one line — point `SOURCE` at it and re-run.
+
+**Fixed in code, not in an editor.** `scripts/prepare_logo.py` measures the skew from the artwork's own text baselines, rotates it upright, un-composites it off the measured plate colour into real transparency, then cuts the symbol, the lockup and the full artwork and sizes each. Un-compositing rather than keying out the white is what keeps the grey tagline opaque — a white key would have left it half transparent, because it is closer to the background than anything else in the image.
+
+**Four findings worth keeping.**
+
+1. **Auto-deskew nearly ruined the good file.** Measured across the full width, the ribbon's curved underside fits a straight line at **-7.7 degrees** on artwork that is perfectly straight. The fit is now taken only across the text block and refused unless the points really lie on a line; anything under a third of a degree is treated as zero, since rotating resamples every pixel for a correction inside the measurement's own noise.
+2. **The tagline cannot be cropped off.** The ribbon runs the full height and the tagline sits *beside* its lower half, so a horizontal slice would take the bottom off the ribbon. It is erased where it actually lives instead — and left of the text block, ink is told apart from ribbon by whether it is attached to the artwork above. Before that fix the alternate layout's favicon contained the letters "More Op".
+3. **A single pixel stretched the canvas.** The naive crop grew the box to 416px for one plate-edge pixel at alpha exactly 20. Cropping now measures ink per band and discards bands under 1% of the heaviest.
+4. **Quantising the two header files** to 128 colours cut them from 29 KB to under 7 KB each — they are base64'd into the page HTML on every rerun, so that is a per-interaction saving — while keeping 64 distinct alpha levels, so no curve hard-edged.
+
+**Limits, stated.** The artwork is light-background only: the deep green wordmark and navy `.AI` both drop to near-zero contrast on the deep green surfaces, so the footer uses the ribbon alone and `core.brand.DARK_SAFE` records the rule. The 2000px export makes the icons sharp well past 64px, which the screenshot did not. A vector master would still be better for print.
+
 
 #### UI-06 — Language becomes a picker in the brand bar
 **Area:** `app.py`, `styles/components.css` · **Priority:** P2 · **Status:** **DONE** · **Requested by:** Waleed
@@ -2255,6 +2278,10 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-13 | **BRAND-02** — the placeholder mark was deleted, not kept alongside | Two logos in one repository is exactly how a brand rots: the header gets updated and the favicon and press kit keep the old drawing, because no page shows both at once. The BRAND-01 mark exists in git history if it is ever wanted | Claude |
+| 2026-09-13 | **BRAND-02** — a measured skew is refused unless it fits a line | The ribbon's curve reads as -7.7 degrees across the full width. A correction that is confidently wrong is worse than none: it would rotate clean artwork into crookedness, and nobody would look for the cause in a deskew step | Claude |
+| 2026-09-13 | **BRAND-02** — the logo is corrected by a script, not by hand | A hand-fixed PNG is unreproducible and unreviewable. A script makes the deskew and background removal deterministic, lets a better source file regenerate everything, and lets a test rebuild each asset and compare bytes | Claude |
+| 2026-09-13 | **BRAND-02** — the logo is not on the home hero | The hero already leads with a headline and a live screening result, and the header sits directly above it. Placing it there would compete with both. "Everywhere it is necessary" is not everywhere | Claude |
 | 2026-09-12 | **BRAND-01** — the symbol carries no gold | The guide makes gold optional and requires the mark to work without it. Rendered, the accent was a floating crescent that read as an eyebrow and turned to mush below 32px. Gold moved to the Urdu wordmark, where the guide also offers it | Claude |
 | 2026-09-12 | **BRAND-01** — candidates were rasterised and compared before one was chosen | The original mark looked correct in coordinates and read as a dumbbell on screen. A logo cannot be reviewed from its geometry | Claude |
 | 2026-09-12 | **UI-05** — the hero animates continuously, against the V3 spec's own 40.5 and 13.3 | Waleed asked for it directly. Mitigated rather than argued: a slow cadence so each card reads as settled, and a hard stop under reduced motion. Logged so a later reader of the spec does not file it as a bug | Waleed |
@@ -2320,6 +2347,8 @@ Append one line per completed piece of work.
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
 | 2026-09-12 | **DATA-02** | **Closed.** Waleed verified the eligibility figures and curated 7 more NAVTTC course records: catalogue 3 → **10, all verified**. Metadata (dates, confidence, disclaimers) completed; three `source_date` values were invalid (two in the future, one still `TODO-VERIFY`). |
+| 2026-09-13 | **BRAND-02** | **The supplied logo replaces the placeholder mark.** `scripts/prepare_logo.py` lifts it off its background into real transparency and cuts 10 assets into `assets/brand/`; `core/brand.py` now serves artwork rather than drawing a mark; the ten placeholder SVGs deleted. Wired to the tab icon, header and footer. Rebuilt on the 2000px export once it arrived, after the guards that stop auto-deskew rotating straight artwork by 7.7 degrees. Suite 394 → **404**. |
+| 2026-09-13 | *(docs)* | README rewritten as a project README rather than the day-one handover checklist. |
 | 2026-09-12 | **BRAND-01** | **New mark and a logo system.** `core/brand.py` as the single source of truth, ten generated exports in `assets/`, favicon wired to `page_icon` for the first time, one-per-session draw animation. Suite 368 → **394**. |
 | 2026-09-12 | **UI-06** | Language moved into the brand bar as a single picker; the nav row is now three screens and one action. Brand bar became a real columns row, styled via `:has(.sa-brandbar)`. Suite 360 → **368**. |
 | 2026-09-12 | **UI-05** | Hero preview cycles through four real results, one per category, on a 16s CSS loop. Reduced-motion override added — the blanket 1ms rule would have parked every card on an `opacity: 0` keyframe and blanked the hero. Suite 351 → **360**. |

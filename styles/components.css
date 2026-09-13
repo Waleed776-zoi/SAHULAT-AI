@@ -31,39 +31,26 @@
   display: none;
 }
 
-.sahulat-logo { display: flex; align-items: baseline; gap: var(--s3); }
-.sa-brandbar .sahulat-logo-mark,
-.sahulat-logo-mark {
-  width: 26px; height: 26px; flex: 0 0 auto; align-self: center;
-  color: var(--primary);             /* the mark is drawn in currentColor */
-  overflow: visible;
-  transition: transform var(--motion-normal) var(--ease);
-}
-/* The destination point is the deeper green: the only two-tone moment in the
-   mark, and it survives being flattened to one ink because the hierarchy is
-   carried by size. */
-.sahulat-logo-mark .sa-logo-point {
-  fill: var(--primary-dark);
-  transition: transform var(--motion-normal) var(--ease);
-}
+/* ---------- The logo ----------
+   One image, not a mark plus two spans of type: the supplied artwork already
+   carries the name in both scripts. Its height is set on the element by
+   core.brand so the intrinsic aspect ratio governs the width - never set both
+   here, or a future change to one silently stretches it.
 
-/* Hover (brand guide section 12): the symbol lifts a pixel and the
-   destination point moves toward it. No scaling, no glow. */
-.sa-brandbar:hover .sahulat-logo-mark,
-.sahulat-logo:hover .sahulat-logo-mark { transform: translateY(-1px); }
-.sa-brandbar:hover .sahulat-logo-mark .sa-logo-point {
-  transform: translate(.6px, -.5px);
+   max-width keeps it inside the column on a narrow screen; height:auto with
+   it stops that becoming a squash. */
+.sahulat-logo, .sahulat-logo-full {
+  display: block; width: auto; max-width: 100%; height: auto;
+  transition: transform var(--motion-normal) var(--ease);
 }
-.sahulat-logo-name {
-  font-family: var(--sa-font-display); font-size: 1.3rem; font-weight: 700;
-  color: var(--primary-dark); line-height: var(--sa-display-lh);
-  letter-spacing: -.01em;
+.sa-brandbar:hover .sahulat-logo { transform: translateY(-1px); }
+
+/* The symbol alone, beside text. Sits on the text baseline rather than the
+   line box, which is what keeps it from riding high next to the name. */
+.sahulat-symbol {
+  display: inline-block; vertical-align: -.35em; width: auto; height: auto;
+  flex: 0 0 auto;
 }
-.sahulat-logo-ur {
-  font-family: 'Noto Nastaliq Urdu', serif; font-size: 1rem;
-  color: var(--primary); opacity: .8; line-height: 2;
-}
-.sahulat-logo-sep { color: var(--border); }
 
 /* ---------- Nav bar: the three product screens (spec 12, 45.3) ----------
    Real navigation, not a tab strip. These are Streamlit buttons because the
@@ -620,6 +607,7 @@
 .sa-footer-brand {
   font-family: var(--sa-font-display); font-size: 1.1rem; font-weight: 700;
   color: var(--primary-dark);
+  display: flex; align-items: center; gap: var(--s3);
 }
 .sa-footer-head {
   font-size: .68rem; font-weight: 700; letter-spacing: .14em;

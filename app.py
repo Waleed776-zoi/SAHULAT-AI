@@ -29,7 +29,7 @@ from pathlib import Path
 import streamlit as st
 
 from core.ad_reader import build_record, extract_raw, read_ad
-from core.brand import mark_svg
+from core.brand import lockup_html, page_icon, symbol_html
 from core.data_loader import (
     KNOWN_CATEGORIES, catalogue_health, category_counts, load_all_opportunities,
 )
@@ -73,14 +73,15 @@ from core.validation import (
     RESULTS_STEP_INDEX, STEPS, completion_percent, validate_step,
 )
 
-# The favicon is generated from the same geometry as everything else, so the
-# tab icon cannot drift away from the logo in the header. Resolved from this
-# file rather than the working directory, which Streamlit does not guarantee.
-FAVICON = Path(__file__).resolve().parent / "assets" / "sahulat-favicon.svg"
+# The tab icon is cut from the same artwork as the header lockup, by
+# scripts/prepare_logo.py, so the two cannot drift apart. page_icon() resolves
+# from core/brand.py rather than the working directory, which Streamlit does
+# not guarantee, and returns None if the build has not been run.
+
 
 st.set_page_config(
     page_title="Sahulat AI — Pakistan's Opportunity Navigator",
-    page_icon=str(FAVICON) if FAVICON.exists() else None,
+    page_icon=page_icon(),
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -168,7 +169,7 @@ def inject_css(lang: str) -> None:
     rtl = """
       .stMain .block-container { direction: rtl; text-align: right; }
       .sa-checkrow, .sa-stepper, .sa-inline-trust,
-      .sa-brandbar, .sahulat-logo { flex-direction: row-reverse; }
+      .sa-brandbar, .sa-footer-brand { flex-direction: row-reverse; }
       a[href^="http"], .sa-ltr { direction: ltr; unicode-bidi: embed;
                                  display: inline-block; }
     """ if urdu else ""
@@ -614,14 +615,20 @@ health = catalogue_health(opportunities)
 
 def logo_mark(animate: bool = False) -> str:
     """
-    The Guided Opportunity Mark, from core.brand.
+    The supplied logo, from core.brand.
 
-    Drawn there rather than here so the header, the favicon and the exported
-    files in assets/ cannot drift apart. `animate` draws the stroke once per
-    session - the brand guide asks for it on first load only, never on every
-    Streamlit rerun, which is what should_animate() already tracks.
+    Served there rather than built here so the header, the tab icon and the
+    files in assets/brand/ cannot drift apart. The lockup already carries the
+    name in both scripts, so the header no longer sets "Sahulat AI" as text
+    beside it - that was the placeholder mark's arrangement, and repeating the
+    name next to artwork that contains it reads as a mistake.
+
+    `animate` settles it in once per session. The placeholder drew its own
+    stroke; artwork cannot, so this is a fade rather than a pretend draw.
     """
-    return mark_svg(size=26, animate=animate)
+    return lockup_html(
+        height=46, alt=t("app_title", lang),
+        css_class="sahulat-logo is-new" if animate else "sahulat-logo")
 
 
 def render_language_picker() -> None:
@@ -657,12 +664,8 @@ def render_header() -> None:
     brand, picker = st.columns([3.4, 1], vertical_alignment="center")
     with brand:
         st.markdown(
-            f'<div class="sa-brandbar">{logo_mark(animate=should_animate("logo"))}'
-            f'<span class="sahulat-logo-name">{t("app_title", lang)}</span>'
-            f'<span class="sahulat-logo-sep">·</span>'
-            f'<span class="sahulat-logo-ur">{t("brand_urdu", lang)}</span></div>',
-            unsafe_allow_html=True,
-        )
+            f'<div class="sa-brandbar">{logo_mark(animate=should_animate("logo"))}</div>',
+            unsafe_allow_html=True)
     with picker:
         render_language_picker()
 
@@ -715,9 +718,12 @@ def render_footer() -> None:
     st.markdown('<div class="sa-footer">', unsafe_allow_html=True)
     brand, discover, trust, language = st.columns([2, 1, 1, 1])
     with brand:
+        # The symbol, not the lockup: the footer sits on the deep green
+        # surface, where the navy wordmark drops to almost no contrast. The
+        # ribbon is green and reads there, so the name stays as text beside it.
         st.markdown(
-            f'<div class="sa-footer-brand">{t("app_title", lang)} · '
-            f'{t("brand_urdu", lang)}</div>'
+            f'<div class="sa-footer-brand">{symbol_html(height=26)}'
+            f'<span>{t("app_title", lang)} · {t("brand_urdu", lang)}</span></div>'
             f'<div style="margin-top:.4rem;max-width:34ch">{t("footer_tagline", lang)}</div>',
             unsafe_allow_html=True)
     with discover:

@@ -1,12 +1,14 @@
 # Sahulat AI
 
+<img src="assets/brand/logo-full.png" alt="Sahulat AI - More Opportunities. Easier Access." width="320">
+
 **Pakistan Opportunity & Services Navigator** — tell it about your circumstances, and it tells you which government scholarships, jobs, skills courses and assistance programmes you are likely to qualify for, and exactly which condition decided it.
 
 Built for the Pak Angels Cohort 11 Hackathon. Runs offline, asks for no identifying data, and never lets a language model decide whether you are eligible.
 
 ```
 Status        30 curated records across 4 categories, all verified
-Tests         394 passing  (python -m unittest discover tests)
+Tests         404 passing  (python -m unittest discover tests)
 Stack         Python 3.12 + Streamlit, stdlib rules engine, Gemini for explanation only
 Languages     English, Urdu, Roman Urdu
 ```
@@ -76,7 +78,7 @@ python -m venv venv
 source venv/bin/activate           # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-python -m unittest discover tests  # expect: Ran 394 tests ... OK
+python -m unittest discover tests  # expect: Ran 404 tests ... OK
 streamlit run app.py
 ```
 
@@ -167,13 +169,36 @@ Enforced in code and guarded by tests — please don't undo these.
 
 ## The logo
 
-The mark is a single stroke that drops into a low bowl, sweeps through it and rises to one destination point — a guided path, echoing the flowing tail of the Urdu *seen*, and starting below before it rises rather than only ever going up.
+A green ribbon **S** with a four-pointed spark, the name in Latin and Urdu, over the line *More Opportunities. Easier Access.*
 
-It lives in `core/brand.py` as geometry, not as a folder of drawings. Every file in `assets/` — primary and premium lockups, compact, Urdu-first, stacked, symbol, monochrome, reversed, favicon, app icon — is generated from that module, and a test asserts each one still matches what the module emits. A brand rots in one specific way: the header gets updated, the favicon and the press kit keep the old drawing, and nobody notices for months because no page shows two of them at once.
+`assets/source/sahulat-logo-source.png` is the master. Everything the app shows is cut from it by `scripts/prepare_logo.py` — lifted off its white background into real transparency, then separated and sized:
 
-Two conventions worth knowing before editing it. The mark uses `currentColor` throughout, so monochrome, reversed and dark contexts are one drawing placed differently rather than four files to keep in step. And its hierarchy is carried by **size, never colour** — a destination point distinguishable only by being gold disappears the moment anything renders in black and white.
+```bash
+python scripts/prepare_logo.py     # assets/source/ -> assets/brand/
+```
 
-**One limitation:** the lockup files reference Georgia and Noto Nastaliq Urdu by name rather than embedding outlines. They render correctly in the app, which loads both fonts, but a file sent to a printer or a third party should have its text converted to paths first.
+Everything in `assets/brand/` is generated. **Do not hand-edit it** — change the source or the script and re-run. A test rebuilds every variant in memory and compares it byte for byte against what is committed, so an edited file fails the suite rather than quietly becoming the odd one out.
+
+| Placement | Variant | Reasoning |
+|---|---|---|
+| Browser tab | `icon-192.png` | Cut from the same artwork, so the tab and the header cannot drift apart |
+| App header | `logo-lockup@2x.png` at 46px | The artwork carries the name in both scripts, so the header no longer repeats it as text |
+| Footer | `logo-symbol@2x.png` at 26px | See the contrast note below |
+| This README | `logo-full.png` | The only place with room for the tagline |
+
+It is deliberately **not** on the home hero. The hero already leads with a headline and a live screening result; a logo there would compete with both, and the header sits directly above it.
+
+### Two things the script exists to get right
+
+**The tagline cannot be cropped off the bottom.** The obvious way to make a header lockup is to cut the tagline away with a horizontal slice — but the ribbon runs the full height of the artwork and the tagline sits *beside* its lower half, not below it. Slicing would take the bottom off the ribbon too. The script erases the tagline where it actually lives, inside the text block, leaving the symbol untouched.
+
+**Deskew has to be able to refuse.** The earlier artwork was a screenshot, tilted about 1.4°, so the script measures rotation from the artwork's own text baseline and corrects it. Measured naively across the full width, though, the ribbon's curved underside fits a straight line at **−7.7°** — on artwork that is perfectly straight. Acting on that would have rotated a clean logo into a crooked one. So the fit is taken only across the text block, and rejected unless the points genuinely lie on a line; a quarter-degree reading is treated as zero, because rotating resamples every pixel and that correction is inside the measurement's own noise.
+
+### The one real constraint
+
+This is **light-background artwork**. Its wordmark is deep green and its `.AI` is navy, both of which fall to almost no contrast on the app's deep green surfaces — so the footer uses the ribbon alone, which is light enough to read there. `core.brand.DARK_SAFE` records which files may go on dark, and a test checks the footer honours it.
+
+Smaller notes: the two files that appear in the header are base64'd into the page HTML on every rerun, so they are quantised to 128 colours — **under 7 KB each instead of 29 KB** — while keeping 64 distinct alpha levels, so no curve hard-edges; a test holds that budget. And `assets/source/` also keeps `sahulat-logo-alt-stacked.png`, an earlier arrangement that sets the Urdu *below* the Latin rather than overlapping it, and reads `Sahulat AI` rather than `Sahulat.AI`. It is kept because it is a different design decision, not a worse file — point `SOURCE` at it and re-run the script to switch.
 
 ---
 
@@ -204,19 +229,23 @@ sahulat_ai/
 │   ├── impact.py                # aggregate figures for the results header
 │   ├── i18n.py                  # English + Urdu prose, and describe_check()
 │   ├── i18n_roman.py            # Roman Urdu
-│   └── brand.py                 # the logo, as geometry — generates everything in assets/
+│   └── brand.py                 # the logo: where the files are, and how they reach a page
 ├── data/opportunities/
 │   ├── schema.json              # the shared record shape (not a record itself)
 │   ├── hec_balochistan_fata.json, peef_punjab.json   # 2 scholarships
 │   ├── navttc_hunarmand.json, navttc_courses.json    # 8 skills records
 │   ├── government_jobs.json                          # 10 job records
 │   └── public_assistance.json                        # 10 assistance records
-├── assets/                      # sahulat-*.svg are generated — never hand-edit, see core/brand.py
+├── assets/
+│   ├── source/                  # the logo as supplied — masters, never edited
+│   └── brand/                   # generated by scripts/prepare_logo.py, never by hand
+├── scripts/
+│   └── prepare_logo.py          # deskew, un-composite, cut and size the logo
 ├── styles/
 │   ├── theme.css                # design tokens
 │   ├── components.css           # component styles
 │   └── animations.css           # all motion, behind prefers-reduced-motion
-└── tests/                       # 394 tests
+└── tests/                       # 404 tests
     ├── test_rules_engine.py          (35)  the deterministic engine
     ├── test_core_modules.py          (63)  loading, verification state, i18n
     ├── test_validation.py            (24)  wizard step rules
@@ -228,7 +257,7 @@ sahulat_ai/
     ├── test_app_ui.py                (44)  real widgets driven through AppTest
     ├── test_v3_visual.py             (34)  screens, hero preview, motion guards
     ├── test_ai_stages.py             (16)  staged progress on every AI call
-    └── test_brand.py                 (26)  logo geometry, and assets/ vs core/brand.py
+    └── test_brand.py                 (36)  the artwork, its build, and where it is placed
 ```
 
 ---
@@ -236,7 +265,7 @@ sahulat_ai/
 ## Tests
 
 ```bash
-python -m unittest discover tests            # all 394
+python -m unittest discover tests            # all 404
 python -m unittest tests.test_rules_engine   # one module
 ```
 
