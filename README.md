@@ -6,7 +6,7 @@ Built for the Pak Angels Cohort 11 Hackathon. Runs offline, asks for no identify
 
 ```
 Status        30 curated records across 4 categories, all verified
-Tests         368 passing  (python -m unittest discover tests)
+Tests         394 passing  (python -m unittest discover tests)
 Stack         Python 3.12 + Streamlit, stdlib rules engine, Gemini for explanation only
 Languages     English, Urdu, Roman Urdu
 ```
@@ -56,7 +56,7 @@ app.py  (Streamlit — three screens: Discover / Read an announcement / How it w
    |        +---------------->  the deadline is reported SEPARATELY as listing state,
    |                            so a closed listing never reads as "you don't qualify"
    |
-   +-- core/llm_client.py      Gemini: explain / answer / extract. Mock fallback for all three.
+   +-- core/llm_client.py      Gemini: explain / answer / simplify / extract. Mock fallback on each.
    +-- core/ad_reader.py       upload bytes -> Gemini JSON -> Opportunity (never written to disk)
    +-- core/rag_engine.py      keyword retrieval by default; Chroma is opt-in
    +-- core/i18n.py            ALL user-facing prose, in all three languages
@@ -76,11 +76,13 @@ python -m venv venv
 source venv/bin/activate           # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-python -m unittest discover tests  # expect: Ran 368 tests ... OK
+python -m unittest discover tests  # expect: Ran 394 tests ... OK
 streamlit run app.py
 ```
 
 That is the whole setup. No API key, no vector database, no model download. AI features will show `[Local mock mode]` text, which is correct rather than broken.
+
+There is also a dev container (`.devcontainer/devcontainer.json`), so **Code → Codespaces → Create codespace** installs the dependencies and serves the app on port 8501 without any local Python at all.
 
 ### Turning the AI features on
 
@@ -100,7 +102,7 @@ That is the whole setup. No API key, no vector database, no model download. AI f
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `GEMINI_API_KEY` | *(unset)* | Enables the three AI features. Absent means mock mode. |
+| `GEMINI_API_KEY` | *(unset)* | Enables the four AI features. Absent means mock mode. |
 | `GEMINI_MODEL` | `gemini-3.5-flash` | Override the model without a code change. |
 | `SAHULAT_SEMANTIC_SEARCH` | `0` | Set to `1` for multilingual embedding retrieval. Needs the optional dependencies. |
 
@@ -163,6 +165,18 @@ Enforced in code and guarded by tests — please don't undo these.
 
 ---
 
+## The logo
+
+The mark is a single stroke that drops into a low bowl, sweeps through it and rises to one destination point — a guided path, echoing the flowing tail of the Urdu *seen*, and starting below before it rises rather than only ever going up.
+
+It lives in `core/brand.py` as geometry, not as a folder of drawings. Every file in `assets/` — primary and premium lockups, compact, Urdu-first, stacked, symbol, monochrome, reversed, favicon, app icon — is generated from that module, and a test asserts each one still matches what the module emits. A brand rots in one specific way: the header gets updated, the favicon and the press kit keep the old drawing, and nobody notices for months because no page shows two of them at once.
+
+Two conventions worth knowing before editing it. The mark uses `currentColor` throughout, so monochrome, reversed and dark contexts are one drawing placed differently rather than four files to keep in step. And its hierarchy is carried by **size, never colour** — a destination point distinguishable only by being gold disappears the moment anything renders in black and white.
+
+**One limitation:** the lockup files reference Georgia and Noto Nastaliq Urdu by name rather than embedding outlines. They render correctly in the app, which loads both fonts, but a file sent to a printer or a third party should have its text converted to paths first.
+
+---
+
 ## Project structure
 
 ```
@@ -170,6 +184,8 @@ sahulat_ai/
 ├── app.py                       # The Streamlit app — run this
 ├── requirements.txt             # streamlit + google-genai; heavy deps commented out
 ├── PROJECT_TRACKER.md           # work log, decision log, invariants, changelog
+├── .devcontainer/
+│   └── devcontainer.json        # Codespaces: installs deps and serves the app
 ├── .streamlit/
 │   ├── config.toml              # theme and performance settings
 │   └── secrets.toml.example     # template for the Gemini key
@@ -187,18 +203,20 @@ sahulat_ai/
 │   ├── next_action.py           # the single most useful next step
 │   ├── impact.py                # aggregate figures for the results header
 │   ├── i18n.py                  # English + Urdu prose, and describe_check()
-│   └── i18n_roman.py            # Roman Urdu
+│   ├── i18n_roman.py            # Roman Urdu
+│   └── brand.py                 # the logo, as geometry — generates everything in assets/
 ├── data/opportunities/
 │   ├── schema.json              # the shared record shape (not a record itself)
 │   ├── hec_balochistan_fata.json, peef_punjab.json   # 2 scholarships
 │   ├── navttc_hunarmand.json, navttc_courses.json    # 8 skills records
 │   ├── government_jobs.json                          # 10 job records
 │   └── public_assistance.json                        # 10 assistance records
+├── assets/                      # sahulat-*.svg are generated — never hand-edit, see core/brand.py
 ├── styles/
 │   ├── theme.css                # design tokens
 │   ├── components.css           # component styles
 │   └── animations.css           # all motion, behind prefers-reduced-motion
-└── tests/                       # 368 tests
+└── tests/                       # 394 tests
     ├── test_rules_engine.py          (35)  the deterministic engine
     ├── test_core_modules.py          (63)  loading, verification state, i18n
     ├── test_validation.py            (24)  wizard step rules
@@ -209,7 +227,8 @@ sahulat_ai/
     ├── test_assistance_catalogue.py  (24)  group gates, always-open enrolment
     ├── test_app_ui.py                (44)  real widgets driven through AppTest
     ├── test_v3_visual.py             (34)  screens, hero preview, motion guards
-    └── test_ai_stages.py             (16)  staged progress on every AI call
+    ├── test_ai_stages.py             (16)  staged progress on every AI call
+    └── test_brand.py                 (26)  logo geometry, and assets/ vs core/brand.py
 ```
 
 ---
@@ -217,7 +236,7 @@ sahulat_ai/
 ## Tests
 
 ```bash
-python -m unittest discover tests            # all 368
+python -m unittest discover tests            # all 394
 python -m unittest tests.test_rules_engine   # one module
 ```
 

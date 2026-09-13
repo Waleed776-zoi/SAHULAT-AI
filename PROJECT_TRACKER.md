@@ -54,7 +54,7 @@ This is the confirmed state of the repo, established by actually running things 
 | Item | Verified result |
 |---|---|
 | Python | 3.12.4 (local `venv/`) |
-| Unit tests | **368/368 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
+| Unit tests | **394/394 pass** — `Ran 130 tests in 15.5s / OK` (12 are AppTest UI regressions, which is what makes it slower) |
 | Data loader | Loads **30** opportunities: 2 scholarship, 10 job, 8 skills, 10 assistance. **No category is empty.** |
 | Job records loaded | **10** — `government_jobs.json`, curated 2026-09-12, all marked verified. Every record carries a future provisional deadline |
 | Assistance records loaded | **10** — `public_assistance.json`, curated 2026-09-12. All continuous-enrolment; two are gated on `required_groups` |
@@ -116,6 +116,7 @@ Ordered by priority, then by ID. **This table is the at-a-glance status; details
 | UI-04 | Every AI call but the Lens showed a wordless spinner | `app.py` | **P1** | **DONE** | — |
 | UI-05 | Hero preview cycles through one real result per category | `app.py` + CSS | **P2** | **DONE** | Waleed |
 | UI-06 | Language moves into the brand bar as one picker | `app.py` + CSS | **P2** | **DONE** | Waleed |
+| BRAND-01 | The mark read as a dumbbell; no logo system existed | `core/brand.py`, `assets/` | **P2** | **DONE** | Waleed |
 | BUG-03 | Zero income / zero marks silently become "not provided" | `app.py` | **P1** | **DONE** | — |
 | BUG-04 | Expired deadline reported as user ineligibility | `rules_engine.py` | **P1** | **DONE** | — |
 | I18N-01 | `name_ur` / `summary_ur` exist in data but are never displayed | `app.py` | **P1** | **DONE** | — |
@@ -495,6 +496,71 @@ keep the **Provisional date** badge beside the countdown.
 - [x] 10 records, loading, screening, and rendering in all three languages.
 - [x] Every deadline a future date and flagged provisional (DATA-06).
 - [x] 30 new guard tests; suite 261 → 292.
+
+---
+
+#### BRAND-01 — The Guided Opportunity Mark, and a logo system behind it
+**Area:** `core/brand.py`, `assets/`, `app.py`, `styles/` · **Priority:** P2 · **Status:** **DONE** · **Spec:** logo guide
+
+**The old mark did not survive being looked at.** It was a shallow curve with a
+weighted dot at *both* ends and a gold triangle floating off to one side.
+Rendered at the guide's own test sizes it read as a **dumbbell**: two ends of
+equal weight are two destinations, and the mark has only one. The gold shape
+had no relationship to anything and was a smudge below 32px.
+
+That was only visible because the candidates were rasterised and compared
+rather than judged from coordinates. Worth repeating for the next mark.
+
+**What replaced it.** A single continuous stroke drops into a low bowl, sweeps
+through it and rises to one destination point. The bowl is the distinctive
+part and it earns its place twice over: it echoes the flowing tail of the Urdu
+letter س (guide concept D), and it says the journey starts below before it
+rises — a path that only ever goes up is not what this product's users are
+living. A plain rising diagonal was tried and rejected as the generic
+growth-chart logo the guide warns against in section 14.
+
+**Decisions worth recording**
+
+- **No gold in the symbol.** The guide offers it as optional and requires the
+  mark to work without it. Drawn, the accent was a floating crescent that read
+  as an eyebrow over the point. Gold earns its place on the Urdu wordmark
+  instead — the "premium civic" combination in section 6.
+- **Hierarchy is size, never colour.** The destination point is wider than the
+  stroke, so flattening to one ink loses nothing. A destination that is only
+  distinguishable by being gold is a destination that vanishes in black and
+  white.
+- **`currentColor` everywhere.** Monochrome, reversed, grayscale and dark mode
+  become a property of where the mark is placed rather than four
+  hand-maintained copies of the drawing.
+
+**The system.** `core/brand.py` is the single source of truth; `assets/` holds
+ten generated files (primary, premium, compact, Urdu-first, stacked, symbol,
+monochrome, reversed, favicon, app icon). A test asserts every file still
+matches what the module emits — a brand rots by the header being updated while
+the favicon and the press kit keep the old drawing, and nobody noticing because
+no page shows two of them at once.
+
+The favicon is its own build: the stroke is thickened because at 16px the
+normal width lands near one device pixel and renders as grey rather than green.
+It is now wired to `page_icon`, which was never set — the app had been shipping
+Streamlit's default icon.
+
+**Animation.** The stroke draws itself in 620ms and the point arrives after it,
+once per session via the existing `should_animate()` — the guide asks for first
+load only, never on every rerun. The dash length is asserted against the
+measured path length, because a mismatch either clips the stroke or leaves it
+unfinished. Reduced motion leaves the mark simply present.
+
+**Known limitation, for whoever finalises this.** The lockup files reference
+Georgia and Noto Nastaliq Urdu by name rather than embedding outlines. They
+render correctly where those fonts exist — which includes this app, since it
+already loads them — but a logo file sent to a printer or a third party should
+have its text converted to paths first. That is a deliberate stopping point,
+not an oversight: outlining is a design-tool step.
+
+- [x] Mark reviewed at 16/24/32/64/128px, in one ink and reversed.
+- [x] Ten exports, guarded against drift by test.
+- [x] Favicon wired; no logo geometry left inlined in `app.py`.
 
 ---
 
@@ -2189,6 +2255,8 @@ Record any choice that a future reader might otherwise reverse by accident. Appe
 | 2026-09-11 | **OPS-05 / PERF-03** — semantic search is opt-in (`SAHULAT_SEMANTIC_SEARCH=1`); keyword is the default, and chromadb/sentence-transformers are commented out of `requirements.txt` | A 3-document corpus gains almost nothing from embeddings but pays ~25-30s of startup, a PyTorch dependency and the Cloud build risk. The multilingual path is preserved for when the catalogue grows | Claude |
 | 2026-09-11 | **OPS-02** — support BOTH SDKs rather than migrating outright | `google-genai` is not installed here, so a hard migration would have broken a working app. `llm_client` now prefers the current SDK and falls back to the EOL one, so `pip install google-genai` is the whole migration | Claude |
 | 2026-09-11 | **BUG-01** — one shared profile form, not two keyed copies | The upload tab reusing the Catalog profile removes the duplicate-widget collision by construction instead of papering over it, and is less to fill in | Claude |
+| 2026-09-12 | **BRAND-01** — the symbol carries no gold | The guide makes gold optional and requires the mark to work without it. Rendered, the accent was a floating crescent that read as an eyebrow and turned to mush below 32px. Gold moved to the Urdu wordmark, where the guide also offers it | Claude |
+| 2026-09-12 | **BRAND-01** — candidates were rasterised and compared before one was chosen | The original mark looked correct in coordinates and read as a dumbbell on screen. A logo cannot be reviewed from its geometry | Claude |
 | 2026-09-12 | **UI-05** — the hero animates continuously, against the V3 spec's own 40.5 and 13.3 | Waleed asked for it directly. Mitigated rather than argued: a slow cadence so each card reads as settled, and a hard stop under reduced motion. Logged so a later reader of the spec does not file it as a bug | Waleed |
 | 2026-09-12 | **UI-05** — the rotation shows one match per category, not the overall top four | The overall top four is three NAVTTC courses. Accurate, and it would advertise a catalogue of nothing but courses | Claude |
 | 2026-09-12 | **UI-03** — the hero preview renders a real screening result, not a designed example card | The spec asked for a product demonstration in the hero. The obvious implementation is a mockup, which would be the one fabricated thing on the landing page of a product built on not fabricating. Running the real engine costs one cached screening pass and cannot drift from the truth | Claude |
@@ -2252,6 +2320,7 @@ Append one line per completed piece of work.
 | 2026-09-11 | TEST-01 | Test suite grown from 8 to **73 passing tests** covering data_loader, models, i18n, ad_reader, llm_client and rag_engine. |
 | 2026-09-11 | FEAT-01, FEAT-02 | Document-readiness checklist with progress, and a plain-text results export that preserves every trust marker. |
 | 2026-09-12 | **DATA-02** | **Closed.** Waleed verified the eligibility figures and curated 7 more NAVTTC course records: catalogue 3 → **10, all verified**. Metadata (dates, confidence, disclaimers) completed; three `source_date` values were invalid (two in the future, one still `TODO-VERIFY`). |
+| 2026-09-12 | **BRAND-01** | **New mark and a logo system.** `core/brand.py` as the single source of truth, ten generated exports in `assets/`, favicon wired to `page_icon` for the first time, one-per-session draw animation. Suite 368 → **394**. |
 | 2026-09-12 | **UI-06** | Language moved into the brand bar as a single picker; the nav row is now three screens and one action. Brand bar became a real columns row, styled via `:has(.sa-brandbar)`. Suite 360 → **368**. |
 | 2026-09-12 | **UI-05** | Hero preview cycles through four real results, one per category, on a 16s CSS loop. Reduced-motion override added — the blanket 1ms rule would have parked every card on an `opacity: 0` keyframe and blanked the hero. Suite 351 → **360**. |
 | 2026-09-12 | **UI-04** | Staged progress on all four remaining AI calls, replacing wordless spinners. Four labelled steps on the follow-up Ask, with pending steps dimmed and blurred. Suite 335 → **351**. |

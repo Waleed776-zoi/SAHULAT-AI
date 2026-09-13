@@ -35,10 +35,25 @@
 .sa-brandbar .sahulat-logo-mark,
 .sahulat-logo-mark {
   width: 26px; height: 26px; flex: 0 0 auto; align-self: center;
+  color: var(--primary);             /* the mark is drawn in currentColor */
+  overflow: visible;
   transition: transform var(--motion-normal) var(--ease);
 }
+/* The destination point is the deeper green: the only two-tone moment in the
+   mark, and it survives being flattened to one ink because the hierarchy is
+   carried by size. */
+.sahulat-logo-mark .sa-logo-point {
+  fill: var(--primary-dark);
+  transition: transform var(--motion-normal) var(--ease);
+}
+
+/* Hover (brand guide section 12): the symbol lifts a pixel and the
+   destination point moves toward it. No scaling, no glow. */
 .sa-brandbar:hover .sahulat-logo-mark,
-.sahulat-logo:hover .sahulat-logo-mark { transform: translateY(-2px); }
+.sahulat-logo:hover .sahulat-logo-mark { transform: translateY(-1px); }
+.sa-brandbar:hover .sahulat-logo-mark .sa-logo-point {
+  transform: translate(.6px, -.5px);
+}
 .sahulat-logo-name {
   font-family: var(--sa-font-display); font-size: 1.3rem; font-weight: 700;
   color: var(--primary-dark); line-height: var(--sa-display-lh);

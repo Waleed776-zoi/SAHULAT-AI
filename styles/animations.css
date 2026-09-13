@@ -94,6 +94,16 @@
                       transform: none !important; }
   .sa-preview-stack > .sa-preview-slide:not(:first-child) { display: none; }
   .sa-preview-dots { display: none !important; }
+
+  /* The logo must be present, not drawing itself. Left to the blanket rule
+     the dash offset would animate in 1ms, which is a flicker rather than a
+     reveal, and the arriving point would pop. */
+  .sa-logo-path.is-drawn {
+    stroke-dasharray: none !important; animation: none !important;
+  }
+  .sa-logo-path.is-drawn ~ .sa-logo-point {
+    animation: none !important; opacity: 1 !important; transform: none !important;
+  }
 }
 
 
@@ -101,3 +111,24 @@
    place, not travelling across the screen. Consumed by the generated
    keyframes in app.preview_cycle_css(). */
 :root { --sa-ease-cycle: cubic-bezier(.4, 0, .2, 1); }
+
+/* ---------- The logo draws itself, once (brand guide section 11) ----------
+   The stroke is 26.98 user units long; 27 covers it with no visible gap at
+   the end. The class is only emitted when should_animate() says this session
+   has not seen it yet, so a Streamlit rerun - which is most interactions -
+   redraws the header without redrawing the logo. */
+@keyframes sa-logo-draw { from { stroke-dashoffset: 27; } to { stroke-dashoffset: 0; } }
+@keyframes sa-logo-arrive {
+  from { opacity: 0; transform: scale(.85); }
+  to   { opacity: 1; transform: none; }
+}
+.sa-logo-path.is-drawn {
+  stroke-dasharray: 27;
+  animation: sa-logo-draw 620ms cubic-bezier(.22, 1, .36, 1) both;
+}
+/* The point arrives after the path reaches it, not alongside it - the order
+   is the whole meaning of the mark. */
+.sa-logo-path.is-drawn ~ .sa-logo-point {
+  transform-box: fill-box; transform-origin: center;
+  animation: sa-logo-arrive 200ms cubic-bezier(.22, 1, .36, 1) 540ms both;
+}
