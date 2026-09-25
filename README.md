@@ -4,7 +4,7 @@
 
 **Pakistan Opportunity & Services Navigator** — tell it about your circumstances, and it tells you which government scholarships, jobs, skills courses and assistance programmes you are likely to qualify for, and exactly which condition decided it.
 
-Built for the Pak Angels Cohort 11 Hackathon. Runs offline, asks for no identifying data, and never lets a language model decide whether you are eligible.
+Built for the Pak Angels Cohort 11 Hackathon. Runs completely offline, asks for no identifying data, and never lets a language model decide whether you are eligible.
 
 ```
 Status        30 curated records across 4 categories, all verified
